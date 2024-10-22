@@ -71,7 +71,7 @@ namespace wowzer.fs.Support
                     var keyAndSize = cursor.Consume(6);
 
                     var keyCount = keyAndSize[0];
-                    var fileSize = ((ulong) keyAndSize[1..].ReadBE<int>() >> 8) | keyAndSize[5];
+                    var fileSize = ((ulong) keyAndSize[1..].ReadBE<int>() << 8) | keyAndSize[5];
                     var contentKey = IContentKey.From(cursor.Consume(spec.KeySize));
 
                     var allKeyData = cursor.Consume(keyCount * header.Encoding.KeySize);
@@ -112,7 +112,7 @@ namespace wowzer.fs.Support
 
                     var rawFileSize = cursor.Consume(5);
 
-                    var fileSize = ((ulong) rawFileSize.ReadBE<int>() >> 8) | rawFileSize[4];
+                    var fileSize = ((ulong) rawFileSize.ReadBE<int>() << 8) | rawFileSize[4];
 
                     encodingMap.Add(encodingKey, (index, fileSize));
                 });

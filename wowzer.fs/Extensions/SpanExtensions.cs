@@ -1,39 +1,79 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Numerics;
 using System.Reflection.Metadata;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace wowzer.fs.Extensions
 {
     public static class SpanExtensions
     {
+        /// <summary>
+        /// Reads an integer type in big-endian from the given span.
+        /// </summary>
+        /// <typeparam name="T">The type of value to read.</typeparam>
+        /// <param name="source"></param>
+        /// <returns></returns>
         public static T ReadBE<T>(this Span<byte> source) where T : unmanaged, IBinaryInteger<T>
             => ReadEndianAware<T>(source, BitConverter.IsLittleEndian);
 
+        /// <summary>
+        /// Reads an integer type in little-endian from the given span.
+        /// </summary>
+        /// <typeparam name="T">The type of value to read.</typeparam>
+        /// <param name="source"></param>
+        /// <returns></returns>
         public static T ReadLE<T>(this Span<byte> source) where T : unmanaged, IBinaryInteger<T>
             => ReadEndianAware<T>(source, !BitConverter.IsLittleEndian);
 
+        /// <summary>
+        /// Reads an integer type in whatever the system endianness is.
+        /// </summary>
+        /// <typeparam name="T">The type of value to read.</typeparam>
+        /// <param name="source"></param>
+        /// <returns></returns>
         public static T ReadNative<T>(this Span<byte> source) where T : unmanaged, IBinaryInteger<T>
             => ReadEndianAware<T>(source, false);
 
+        /// <summary>
+        /// Reads an array of integer type in big-endian from the given span.
+        /// </summary>
+        /// <typeparam name="T">The type of value to read.</typeparam>
+        /// <param name="source"></param>
+        /// <param name="count">The amount of values to read.</param>
+        /// <returns></returns>
         public static T[] ReadBE<T>(this Span<byte> source, int count) where T : unmanaged, IBinaryInteger<T>
             => ReadEndianAware<T>(source, count, BitConverter.IsLittleEndian);
 
+        /// <summary>
+        /// Reads an array of integer type in little-endian from the given span.
+        /// </summary>
+        /// <typeparam name="T">The type of value to read.</typeparam>
+        /// <param name="source"></param>
+        /// <param name="count">The amount of values to read.</param>
+        /// <returns></returns>
         public static T[] ReadLE<T>(this Span<byte> source, int count) where T : unmanaged, IBinaryInteger<T>
             => ReadEndianAware<T>(source, count, !BitConverter.IsLittleEndian);
 
+        /// <summary>
+        /// Reads an array of integer type in whatever the system endianness is.
+        /// </summary>
+        /// <typeparam name="T">The type of value to read.</typeparam>
+        /// <param name="source"></param>
+        /// <param name="count">The amount of values to read.</param>
+        /// <returns></returns>
         public static T[] ReadNative<T>(this Span<byte> source, int count) where T : unmanaged, IBinaryInteger<T>
             => ReadEndianAware<T>(source, count, false);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining), SkipLocalsInit]
         private static T ReadEndianAware<T>(this Span<byte> source, bool reverse) where T : unmanaged, IBinaryInteger<T>
         {
+            Debug.Assert(source.Length >= Unsafe.SizeOf<T>());
+
             var value = MemoryMarshal.Read<T>(source);
 
             var valueSpan = MemoryMarshal.CreateSpan(ref value, 1);
@@ -46,6 +86,8 @@ namespace wowzer.fs.Extensions
         [MethodImpl(MethodImplOptions.AggressiveInlining), SkipLocalsInit]
         private static T[] ReadEndianAware<T>(this Span<byte> source, int count, bool reverse) where T : unmanaged, IBinaryInteger<T>
         {
+            Debug.Assert(source.Length >= Unsafe.SizeOf<T>() * count);
+
             var value = GC.AllocateUninitializedArray<T>(count);
             MemoryMarshal.Cast<byte, T>(source)[..count].CopyTo(value);
 
@@ -76,7 +118,7 @@ namespace wowzer.fs.Extensions
 
                 while (i <= iterationCount)
                 {
-                    var source = Vector256.LoadUnsafe(ref sourceRef, (uint)i).AsByte();
+                    var source = Vector256.LoadUnsafe(ref sourceRef, (uint) i).AsByte();
 
                     Vector256.StoreUnsafe(
                         Vector256.Shuffle(source, swizzle).As<byte, T>(),
@@ -93,7 +135,7 @@ namespace wowzer.fs.Extensions
 
                 while (i <= iterationCount)
                 {
-                    var source = Vector128.LoadUnsafe(ref sourceRef, (uint)i).AsByte();
+                    var source = Vector128.LoadUnsafe(ref sourceRef, (uint) i).AsByte();
 
                     Vector128.StoreUnsafe(
                         Vector128.Shuffle(source, swizzle).As<byte, T>(),
@@ -103,6 +145,7 @@ namespace wowzer.fs.Extensions
                 }
             }
 
+            // Is this worth the effort?
             iterationCount = value.Length - Vector64<T>.Count;
             if (Vector64.IsHardwareAccelerated && i <= iterationCount)
             {
@@ -110,7 +153,7 @@ namespace wowzer.fs.Extensions
 
                 while (i <= iterationCount)
                 {
-                    var source = Vector64.LoadUnsafe(ref sourceRef, (uint)i).AsByte();
+                    var source = Vector64.LoadUnsafe(ref sourceRef, (uint) i).AsByte();
 
                     Vector64.StoreUnsafe(
                         Vector64.Shuffle(source, swizzle).As<byte, T>(),
@@ -138,7 +181,7 @@ namespace wowzer.fs.Extensions
             }
         }
 
-        // NB: Better
+        //! TODO: Revisit in .NET 9, the compiler might be able to see the output of this function is a constant.
         [MethodImpl(MethodImplOptions.AggressiveInlining), SkipLocalsInit]
         private unsafe static void MakeSwizzle<M>(ref M zero, int wordSize) where M : struct
         {
@@ -149,21 +192,6 @@ namespace wowzer.fs.Extensions
                 for (var j = wordSize - 1; j >= 0; --j)
                     zeroPtr[i + j] = (byte)(wordSize - j - 1 + i);
             }
-        }
-
-        // NB: Worse
-        private static unsafe byte[] MakeSwizzle<T>() where T : unmanaged, IBinaryInteger<T>
-        {
-            var mask = new byte[Unsafe.SizeOf<T>() * Vector<T>.Count];
-            var zeroPtr = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetArrayDataReference(mask));
-
-            for (var i = 0; i < mask.Length; i += Unsafe.SizeOf<T>())
-            {
-                for (var j = Unsafe.SizeOf<T>() - 1; j >= 0; --j)
-                    zeroPtr[i + j] = (byte)(Unsafe.SizeOf<T>() - j - 1 + i);
-            }
-
-            return mask;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -14,18 +14,25 @@ namespace wowzer.fs.Extensions
         [SkipLocalsInit]
         public static unsafe uint ReadFourCC(this Stream stream)
         {
-            Span<byte> rawData = stackalloc byte[4];
-            stream.ReadExactly(rawData);
-
-            return MemoryMarshal.Read<uint>(rawData);
+            var value = 0u;
+            stream.ReadExactly(MemoryMarshal.AsBytes(MemoryMarshal.CreateSpan(ref value, 1)));
+            return value;
         }
 
         public static byte ReadUInt8(this Stream stream) => (byte) stream.ReadByte();
+        public static sbyte ReadInt8(this Stream stream) => (sbyte) stream.ReadByte();
 
         public static byte[] ReadUInt8(this Stream stream, int length)
         {
             var buffer = GC.AllocateUninitializedArray<byte>(length);
             stream.ReadExactly(buffer);
+            return buffer;
+        }
+
+        public static sbyte[] ReadInt8(this Stream stream, int length)
+        {
+            var buffer = GC.AllocateUninitializedArray<sbyte>(length);
+            stream.ReadExactly(MemoryMarshal.AsBytes(buffer.AsSpan()));
             return buffer;
         }
 
@@ -38,7 +45,7 @@ namespace wowzer.fs.Extensions
                 stream.Seek(count, SeekOrigin.Current);
             else
             {
-                Span<byte> buffer = new byte[bufferSize];
+                Span<byte> buffer = GC.AllocateUninitializedArray<byte>(bufferSize);
                 for (var i = 0; i < count / bufferSize; ++i)
                     stream.ReadExactly(buffer);
                 stream.ReadExactly(buffer[..(count % bufferSize)]);

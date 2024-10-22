@@ -19,14 +19,20 @@ namespace wowzer.fs.Extensions
         public static T ReadLE<T>(this Span<byte> source) where T : unmanaged, IBinaryInteger<T>
             => ReadEndianAware<T>(source, !BitConverter.IsLittleEndian);
 
+        public static T ReadNative<T>(this Span<byte> source) where T : unmanaged, IBinaryInteger<T>
+            => ReadEndianAware<T>(source, false);
+
         public static T[] ReadBE<T>(this Span<byte> source, int count) where T : unmanaged, IBinaryInteger<T>
             => ReadEndianAware<T>(source, count, BitConverter.IsLittleEndian);
 
         public static T[] ReadLE<T>(this Span<byte> source, int count) where T : unmanaged, IBinaryInteger<T>
             => ReadEndianAware<T>(source, count, !BitConverter.IsLittleEndian);
 
+        public static T[] ReadNative<T>(this Span<byte> source, int count) where T : unmanaged, IBinaryInteger<T>
+            => ReadEndianAware<T>(source, count, false);
+
         [MethodImpl(MethodImplOptions.AggressiveInlining), SkipLocalsInit]
-        public static T ReadEndianAware<T>(this Span<byte> source, bool reverse) where T : unmanaged, IBinaryInteger<T>
+        private static T ReadEndianAware<T>(this Span<byte> source, bool reverse) where T : unmanaged, IBinaryInteger<T>
         {
             var value = MemoryMarshal.Read<T>(source);
 
@@ -38,7 +44,7 @@ namespace wowzer.fs.Extensions
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining), SkipLocalsInit]
-        public static T[] ReadEndianAware<T>(this Span<byte> source, int count, bool reverse) where T : unmanaged, IBinaryInteger<T>
+        private static T[] ReadEndianAware<T>(this Span<byte> source, int count, bool reverse) where T : unmanaged, IBinaryInteger<T>
         {
             var value = GC.AllocateUninitializedArray<T>(count);
             MemoryMarshal.Cast<byte, T>(source)[..count].CopyTo(value);
@@ -51,8 +57,6 @@ namespace wowzer.fs.Extensions
 
         /// <summary>
         /// Performs endianness reversal on the current span. This operation happens in-place.
-        /// 
-        /// Needs perf review on .NET 9
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="value"></param>

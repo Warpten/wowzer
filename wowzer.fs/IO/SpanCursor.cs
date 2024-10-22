@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -10,6 +11,9 @@ using wowzer.fs.Extensions;
 
 namespace wowzer.fs.IO
 {
+    /// <summary>
+    /// A thin wrapper around a <see cref="Span{T}"/>, keeping track of the position of a cursor within said span.
+    /// </summary>
     public ref struct SpanCursor
     {
         private readonly Span<byte> _data;
@@ -29,7 +33,8 @@ namespace wowzer.fs.IO
 
         public byte ReadUInt8()
         {
-            var value = _data[_offset];
+            var value = Unsafe.Add(ref MemoryMarshal.GetReference(_data), _offset);
+
             _offset += 1;
             return value;
         }
@@ -40,6 +45,13 @@ namespace wowzer.fs.IO
         {
             var value = _data[..offset];
             _offset += offset;
+            return value;
+        }
+
+        public T ReadNative<T>() where T : unmanaged, IBinaryInteger<T>
+        {
+            var value = _data[_offset..].ReadNative<T>();
+            _offset += Unsafe.SizeOf<T>();
             return value;
         }
 
@@ -67,6 +79,13 @@ namespace wowzer.fs.IO
         public T[] ReadBE<T>(int count) where T : unmanaged, IBinaryInteger<T>
         {
             var value = _data[_offset..].ReadBE<T>(count);
+            _offset += Unsafe.SizeOf<T>() * count;
+            return value;
+        }
+
+        public T[] ReadNative<T>(int count) where T : unmanaged, IBinaryInteger<T>
+        {
+            var value = _data[_offset..].ReadNative<T>(count);
             _offset += Unsafe.SizeOf<T>() * count;
             return value;
         }

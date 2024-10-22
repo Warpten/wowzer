@@ -24,17 +24,17 @@ namespace wowzer.fs.tests
         [TestMethod]
         public void TestVectorizedEndianness()
         {
-            Span<uint> span = new uint[]
-            {
+            Span<uint> span =
+            [
                 0x11223344u, 0x11223344u, 0x11223344u, 0x11223344u,
                 0x11223344u, 0x11223344u, 0x11223344u, 0x11223344u,
                 0x11223344u, 0x11223344u, 0x11223344u, 0x11223344u,
                 0x11223344u, 0x11223344u, 0x11223344u, 0x11223344u,
                 0x11223344u, 0x11223344u, 0x11223344u, 0x11223344u,
                 0x11223344u
-            };
+            ];
 
-            StreamEndiannessExtensions.ReverseEndianness(span);
+            SpanExtensions.ReverseEndianness(span);
             for (var i = 0; i < span.Length; ++i)
                 Assert.AreEqual(0x44332211u, span[i]);
         }

@@ -9,7 +9,7 @@ using System.Runtime.InteropServices;
 using wowzer.fs.Extensions;
 using wowzer.fs.IO;
 
-namespace wowzer.fs.Support
+namespace wowzer.fs.CASC
 {
     internal record struct Spec(int KeySize, int PageSize, int PageCount);
 

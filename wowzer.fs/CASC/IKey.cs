@@ -2,7 +2,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace wowzer.fs.Support
+namespace wowzer.fs.CASC
 {
     /// <summary>
     /// An abstact key used to identify resources in a CASC file system.

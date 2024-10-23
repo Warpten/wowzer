@@ -1,17 +1,8 @@
 ﻿using System;
-using System.Buffers.Binary;
-using System.Collections.Generic;
-using System.ComponentModel.Design;
-using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Runtime.Intrinsics;
-using System.Runtime.Intrinsics.X86;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace wowzer.fs.Extensions
 {

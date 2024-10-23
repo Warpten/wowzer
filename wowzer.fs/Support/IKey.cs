@@ -4,10 +4,16 @@ using System.Runtime.InteropServices;
 
 namespace wowzer.fs.Support
 {
+    /// <summary>
+    /// An abstact key used to identify resources in a CASC file system.
+    /// </summary>
     public interface IKey {
         ReadOnlySpan<byte> AsSpan();
     }
 
+    /// <summary>
+    /// A so-called encoding key used to identify resources in a CASC file system.
+    /// </summary>
     public interface IEncodingKey : IKey {
         public static IEncodingKey From(ReadOnlySpan<byte> data) {
             if (data.Length == 0x10)
@@ -17,6 +23,9 @@ namespace wowzer.fs.Support
         }
     }
 
+    /// <summary>
+    /// A so-called content key used to identify resources in a CASC file system.
+    /// </summary>
     public interface IContentKey : IKey {
         public static IContentKey From(ReadOnlySpan<byte> data) {
             if (data.Length == 0x10)
@@ -42,22 +51,25 @@ namespace wowzer.fs.Support
         private readonly byte[] _rawData;
 
         public KeyStorage(ReadOnlySpan<byte> sourceData) {
-            _rawData = new byte[sourceData.Length];
+            _rawData = GC.AllocateUninitializedArray<byte>(sourceData.Length);
             sourceData.CopyTo(_rawData);
         }
-        
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ReadOnlySpan<byte> AsSpan() => _rawData;
     }
 
     readonly struct EncodingKey<T>(T storage) : IEncodingKey where T : struct, IKey {
         private readonly T _storage = storage;
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ReadOnlySpan<byte> AsSpan() => _storage.AsSpan();
     }
 
     readonly struct ContentKey<T>(T storage) : IContentKey where T : struct, IKey {
         private readonly T _storage = storage;
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ReadOnlySpan<byte> AsSpan() => _storage.AsSpan();
     }
 

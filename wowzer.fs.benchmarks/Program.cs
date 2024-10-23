@@ -13,7 +13,7 @@ namespace wowzer.fs.benchmarks
             cb.BenchmarkEndianness();
             cb.BenchmarkEndiannessBuiltin();
 
-            var summary = BenchmarkRunner.Run(typeof(Program).Assembly);
+            var summary = BenchmarkRunner.Run(typeof(Program).Assembly, null, args);
         }
     }
 }

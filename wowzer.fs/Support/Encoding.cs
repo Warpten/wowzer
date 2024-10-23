@@ -1,16 +1,10 @@
 ﻿using System;
 using System.Buffers;
-using System.Buffers.Binary;
-using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Reflection.PortableExecutable;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading.Tasks;
 
 using wowzer.fs.Extensions;
 using wowzer.fs.IO;

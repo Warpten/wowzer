@@ -4,10 +4,10 @@ using wowzer.fs.Extensions;
 
 namespace wowzer.fs.tests
 {
-    [TestClass]
+    [TestFixture]
     public class StreamExtensionsTests
     {
-        [TestMethod]
+        [Test]
         public void TestEndianness()
         {
             using var stream = new MemoryStream();
@@ -18,10 +18,10 @@ namespace wowzer.fs.tests
             stream.Position = 0;
 
             var value = stream.ReadUInt32BE();
-            Assert.AreEqual(0x44332211u, value);
+            Assert.That(0x44332211u == value);
         }
 
-        [TestMethod]
+        [Test]
         public void TestVectorizedEndianness()
         {
             Span<uint> span =
@@ -36,7 +36,7 @@ namespace wowzer.fs.tests
 
             SpanExtensions.ReverseEndianness(span);
             for (var i = 0; i < span.Length; ++i)
-                Assert.AreEqual(0x44332211u, span[i]);
+                Assert.That(0x44332211u == span[i]);
         }
     }
 }

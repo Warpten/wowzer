@@ -37,7 +37,7 @@ namespace wowzer.fs.Extensions
         }
 
         [SkipLocalsInit]
-        public static void Skip(this Stream stream, int count, int bufferSize = 128)
+        public static void Skip(this Stream stream, int count)
         {
             // TODO: Optimize this for non-seekable strems when skipping small sizes.
 
@@ -45,6 +45,7 @@ namespace wowzer.fs.Extensions
                 stream.Seek(count, SeekOrigin.Current);
             else
             {
+                var bufferSize = Math.Min(2048, (count + 1) & -2);
                 Span<byte> buffer = GC.AllocateUninitializedArray<byte>(bufferSize);
                 for (var i = 0; i < count / bufferSize; ++i)
                     stream.ReadExactly(buffer);

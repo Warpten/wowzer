@@ -1,7 +1,5 @@
 using System.Text;
 
-using NUnit.Framework;
-
 using wowzer.fs.Extensions;
 
 namespace wowzer.fs.tests
@@ -36,7 +34,7 @@ namespace wowzer.fs.tests
 
             SpanExtensions.ReverseEndianness(span);
             for (var i = 0; i < span.Length; ++i)
-                Assert.AreaEqual(0x44332211u, span[i]);
+                Assert.AreEqual(0x44332211u, span[i]);
         }
     }
 }

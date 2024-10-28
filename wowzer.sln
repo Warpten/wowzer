@@ -5,11 +5,11 @@ VisualStudioVersion = 17.8.34408.163
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "wowzer.api", "wowzer.api\wowzer.api.csproj", "{6A2943D4-600F-4A1E-B850-446DA8F66A5F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "wowzer.fs", "wowzer.fs\wowzer.fs.csproj", "{B4EB8F69-BD4F-4170-894A-F11CA7DB8FE6}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "wowzer.fs", "wowzer.fs\wowzer.fs.csproj", "{B4EB8F69-BD4F-4170-894A-F11CA7DB8FE6}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "wowzer.fs.tests", "wowzer.fs.tests\wowzer.fs.tests\wowzer.fs.tests.csproj", "{1F8377E9-3C60-4CCD-842F-9B99E2C5D703}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "wowzer.fs.benchmarks", "wowzer.fs.benchmarks\wowzer.fs.benchmarks.csproj", "{A6208C55-E1D3-45B6-886E-604425DCEC23}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "wowzer.fs.benchmarks", "wowzer.fs.benchmarks\wowzer.fs.benchmarks.csproj", "{A6208C55-E1D3-45B6-886E-604425DCEC23}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "wowzer.tests", "wowzer.tests\wowzer.tests.csproj", "{98A1FD67-3C69-479E-BC35-03EEBEE61836}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -25,14 +25,14 @@ Global
 		{B4EB8F69-BD4F-4170-894A-F11CA7DB8FE6}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B4EB8F69-BD4F-4170-894A-F11CA7DB8FE6}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B4EB8F69-BD4F-4170-894A-F11CA7DB8FE6}.Release|Any CPU.Build.0 = Release|Any CPU
-		{1F8377E9-3C60-4CCD-842F-9B99E2C5D703}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{1F8377E9-3C60-4CCD-842F-9B99E2C5D703}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{1F8377E9-3C60-4CCD-842F-9B99E2C5D703}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{1F8377E9-3C60-4CCD-842F-9B99E2C5D703}.Release|Any CPU.Build.0 = Release|Any CPU
 		{A6208C55-E1D3-45B6-886E-604425DCEC23}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{A6208C55-E1D3-45B6-886E-604425DCEC23}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A6208C55-E1D3-45B6-886E-604425DCEC23}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A6208C55-E1D3-45B6-886E-604425DCEC23}.Release|Any CPU.Build.0 = Release|Any CPU
+		{98A1FD67-3C69-479E-BC35-03EEBEE61836}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{98A1FD67-3C69-479E-BC35-03EEBEE61836}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{98A1FD67-3C69-479E-BC35-03EEBEE61836}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{98A1FD67-3C69-479E-BC35-03EEBEE61836}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -51,26 +51,26 @@ namespace wowzer.fs.CASC
             var header = Header.Read(dataStream);
             dataStream.Skip(header.EncodingSpec);
 
-            var contentMap = new Dictionary<IContentKey, Entry>();
+            var contentMap = new Dictionary<ContentKey, Entry>();
             if (loadFlags.HasFlag(LoadFlags.Content))
             {
                 ReadSection(dataStream, header.Content, 1 + 5 + header.Content.KeySize, (ref SpanCursor cursor, Spec spec) =>
                 {
-                    var firstContentKey = IContentKey.From(cursor.Consume(spec.KeySize));
+                    var firstContentKey = ContentKey.From(cursor.Consume(spec.KeySize));
                     var checksum = cursor.ReadLE<UInt128>();
 
                     return (firstContentKey, checksum);
-                }, (ref SpanCursor cursor, Spec spec, (IContentKey, UInt128) pageHeader) =>
+                }, (ref SpanCursor cursor, Spec spec, (ContentKey, UInt128) pageHeader) =>
                 {
                     var keyAndSize = cursor.Consume(6);
 
                     var keyCount = keyAndSize[0];
                     var fileSize = ((ulong) keyAndSize[1..].ReadBE<int>() << 8) | keyAndSize[5];
-                    var contentKey = IContentKey.From(cursor.Consume(spec.KeySize));
+                    var contentKey = ContentKey.From(cursor.Consume(spec.KeySize));
 
                     var allKeyData = cursor.Consume(keyCount * header.Encoding.KeySize);
 
-                    var keys = new List<IEncodingKey>(keyCount);
+                    var keys = new List<EncodingKey>(keyCount);
                     for (var i = 0; i < keyCount; ++i)
                     {
                         ref byte keyData = ref Unsafe.Add(
@@ -78,7 +78,7 @@ namespace wowzer.fs.CASC
                             i * header.Encoding.KeySize
                         );
 
-                        keys.Add(IEncodingKey.From(MemoryMarshal.CreateSpan(ref keyData, header.Encoding.KeySize)));
+                        keys.Add(EncodingKey.From(MemoryMarshal.CreateSpan(ref keyData, header.Encoding.KeySize)));
                     }
 
                     var entry = new Entry(keys, fileSize);
@@ -90,18 +90,18 @@ namespace wowzer.fs.CASC
                 dataStream.Skip(header.Content.PageCount * (header.Content.KeySize + 0x10 + header.Content.PageSize));
             }
 
-            var encodingMap = new Dictionary<IEncodingKey, (uint, ulong)>();
+            var encodingMap = new Dictionary<EncodingKey, (uint, ulong)>();
             if (loadFlags.HasFlag(LoadFlags.Encoding))
             {
                 ReadSection(dataStream, header.Encoding, 4 + 5 + header.Encoding.KeySize, (ref SpanCursor cursor, Spec spec) =>
                 {
-                    var firstKey = IEncodingKey.From(cursor.Consume(spec.KeySize));
+                    var firstKey = EncodingKey.From(cursor.Consume(spec.KeySize));
                     var checksum = cursor.ReadLE<UInt128>();
 
                     return (firstKey, checksum);
-                }, (ref SpanCursor cursor, Spec spec, (IEncodingKey, UInt128) pageHeader) =>
+                }, (ref SpanCursor cursor, Spec spec, (EncodingKey, UInt128) pageHeader) =>
                 {
-                    var encodingKey = IEncodingKey.From(cursor.Consume(spec.KeySize));
+                    var encodingKey = EncodingKey.From(cursor.Consume(spec.KeySize));
                     var index = cursor.ReadBE<uint>();
 
                     var rawFileSize = cursor.Consume(5);
@@ -141,5 +141,5 @@ namespace wowzer.fs.CASC
         }
     }
 
-    internal record struct Entry(List<IEncodingKey> Keys, ulong FileSize);
+    internal record struct Entry(List<EncodingKey> Keys, ulong FileSize);
 }

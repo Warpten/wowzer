@@ -12,6 +12,28 @@ namespace wowzer.fs.Extensions
 {
     public static class SpanExtensions
     {
+        public static Range[] Split<T>(this ReadOnlySpan<T> source, T delimiter, bool removeEmptyEntries = true)
+            where T : IEquatable<T>
+        {
+            if (source.Length == 0)
+                return [];
+
+            var list = new List<Range>();
+            for (var i = 0; i < source.Length;)
+            {
+                var delimiterIndex = source[i..].IndexOf(delimiter);
+                if (delimiterIndex == -1)
+                    delimiterIndex = source.Length;
+                
+                if (!removeEmptyEntries || delimiterIndex != i + 1)
+                    list.Add(new Range(i, delimiterIndex));
+
+                i = delimiterIndex + 1;
+            }
+
+            return [.. list];
+        }
+
         /// <summary>
         /// Reads an integer type in big-endian from the given span.
         /// </summary>

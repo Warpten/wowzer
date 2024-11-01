@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 using wowzer.fs.CASC;
+using wowzer.tests;
 
 namespace wowzer.fs.tests
 {
@@ -28,9 +29,22 @@ namespace wowzer.fs.tests
 
             var config = new Configuration(ms);
 
-            var rootContentKey = default(IContentKey);
-            _ = RootSpec.TryParse(config, ref rootContentKey);
-            Assert.AreEqual(IContentKey.From([0xa2, 0x46, 0xf1, 0x92, 0xdb, 0xe5, 0xb3, 0x9c, 0xf1, 0x70, 0xf1, 0x56, 0xcf, 0x88, 0x3d, 0x11]), rootContentKey);
+            // Test root (ckey)
+            Assert.That.AreEqual(
+                ContentKey.From([0xa2, 0x46, 0xf1, 0x92, 0xdb, 0xe5, 0xb3, 0x9c, 0xf1, 0x70, 0xf1, 0x56, 0xcf, 0x88, 0x3d, 0x11]),
+                config["root"].AsContentKey(),
+                (left, right) => left.Equals(right)
+            );
+
+            // Test archives (ekeys)
+            Assert.That.AreEqual(
+                [
+                    EncodingKey.From([0x00, 0x17, 0xa4, 0x02, 0xf5, 0x56, 0xfb, 0xec, 0xe4, 0x6c, 0x38, 0xdc, 0x43, 0x1a, 0x2c, 0x9b]),
+                    EncodingKey.From([0x00, 0x25, 0x06, 0x08, 0x01, 0x81, 0x3b, 0x79, 0x6c, 0x78, 0x7a, 0x77, 0x7b, 0xdb, 0xfc, 0xf9])
+                ],
+                config["archives"].AsEncodingKeys(),
+                (left, right) => left.SequenceEqual(right)
+            );
         }
     }
 }

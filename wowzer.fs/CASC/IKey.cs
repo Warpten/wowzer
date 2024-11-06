@@ -14,14 +14,33 @@ namespace wowzer.fs.CASC
     /// <summary>
     /// An abstact key used to identify resources in a CASC file system.
     /// </summary>
-    public interface IKey<T> : IEquatable<T> where T : IKey<T> {
+    public interface IKey<T> : IEquatable<T>, IComparable<T> where T : IKey<T> {
+        /// <summary>
+        /// Returns a read-only view of the bytes stored in this object.
+        /// </summary>
+        /// <returns></returns>
         [Pure] public ReadOnlySpan<byte> AsSpan();
+
+        /// <summary>
+        /// Accesses the <paramref name="index"/>-th byte of this key.
+        /// </summary>
+        /// <param name="index"></param>
+        /// <returns></returns>
+        /// <remarks><b>This function is unsafe and avoids bounds checks</b>; see <see cref="Length"/>.</remarks>
+        public byte this[int index] => Unsafe.Add(ref MemoryMarshal.GetReference(AsSpan()), index);
+
+        /// <summary>
+        /// Returns the actual amount of bytes this object encapsulates.
+        /// </summary>
+        public int Length { get; }
 
         [Pure] internal static abstract T From(ReadOnlySpan<byte> data);
 
         bool IEquatable<T>.Equals(T other) => other.AsSpan().SequenceEqual(AsSpan());
 
-        [Pure, SkipLocalsInit] internal static virtual T[] FromString(ReadOnlySpan<byte> str, byte delimiter = (byte) ' ')
+        int IComparable<T>.CompareTo(T other) => other.AsSpan().SequenceCompareTo(AsSpan());
+
+        [Pure, SkipLocalsInit] internal static virtual T[] FromString(ReadOnlySpan<byte> str, byte delimiter)
         {
             var sections = str.Split(delimiter, true);
             if (sections.Length == 0)
@@ -64,17 +83,19 @@ namespace wowzer.fs.CASC
                     var v = Vector128.LoadUnsafe(ref srcRef, offset);
 
                     var t1 = v + Vector128.Create((byte)(0xFF - '9')); // Move digits '0'..'9' into range 0xF6..0xFF.
-                    var t2 = SIMD.SubtractSaturate(t1, Vector128.Create((byte)6));
-                    var t3 = Vector128.Subtract(t2, Vector128.Create((byte)0xF0));
-                    var t4 = v & Vector128.Create((byte)0xDF);
-                    var t5 = t4 - Vector128.Create((byte)'A');
-                    var t6 = SIMD.AddSaturate(t5, Vector128.Create((byte)10));
+                    var t2 = SIMD.SubtractSaturate(t1, Vector128.Create((byte)6)); // 6 blanks above 0..9
+                    var t3 = Vector128.Subtract(t2, Vector128.Create((byte)0xF0)); // Remove high nibble
+                    var t4 = v & Vector128.Create((byte)0xDF); // Squash case
+                    var t5 = t4 - Vector128.Create((byte)'A'); // Move 'A'..'F' to 0..5.
+                    var t6 = SIMD.AddSaturate(t5, Vector128.Create((byte)10)); // And now to 10..15 (and clamp to that range)
 
-                    var t7 = Vector128.Min(t3, t6);
+                    var t7 = Vector128.Min(t3, t6); // Pick minimum.
                     var t8 = SIMD.AddSaturate(t7, Vector128.Create((byte)(127 - 15)));
 
                     if (t8.ExtractMostSignificantBits() != 0)
                         return default;
+
+                    // t7 contains 0..15 (as in, only nibbles). Merge.
 
                     Vector128<byte> t0;
                     if (Sse3.IsSupported)
@@ -86,6 +107,7 @@ namespace wowzer.fs.CASC
                     {
                         // Workaround for missing MultiplyAddAdjacent on ARM -- Stolen from corelib
                         // Note this is specific to the 0x0110 case - See Convert.FromHexString.
+                        // General implementation lives in SIMD.MultiplyAddAdjacent.
                         var even = AdvSimd.Arm64.TransposeEven(t7, Vector128<byte>.Zero).AsInt16();
                         var odd = AdvSimd.Arm64.TransposeOdd(t7, Vector128<byte>.Zero).AsInt16();
                         even = AdvSimd.ShiftLeftLogical(even, 4).AsInt16();
@@ -101,10 +123,7 @@ namespace wowzer.fs.CASC
                     var output = Vector128.Shuffle(t0, Vector128.Create((byte) 0, 2, 4, 6, 8, 10, 12, 14, 0, 0, 0, 0, 0, 0, 0, 0));
 
                     Unsafe.WriteUnaligned(
-                        ref Unsafe.Add(
-                            ref MemoryMarshal.GetReference(workBuffer),
-                            offset / 2
-                        ),
+                        ref Unsafe.Add(ref dstRef, offset / 2),
                         output.AsUInt64().ToScalar()
                     );
 
@@ -115,6 +134,7 @@ namespace wowzer.fs.CASC
 
             for (; offset < (nuint) sourceChars.Length; offset += 2)
             {
+                // There's a way to make this branchless, I guess...
                 var highNibble = Unsafe.Add(ref srcRef, offset);
                 highNibble = (byte)(highNibble - (highNibble < 58 ? 48 : 87));
 
@@ -141,6 +161,17 @@ namespace wowzer.fs.CASC
             => T.FromString(str);
 
         /// <summary>
+        /// Converts the given <paramref name="delimiter"/>-separated hex ASCII string to an array of implementations of <see cref="IKey{T}"/>.
+        /// </summary>
+        /// <typeparam name="T">The type of key to produce</typeparam>
+        /// <param name="str">An ASCII hex string to parse.</param>
+        /// <param name="delimiter">A delimiter indicating how to split the given <paramref name="str"/>.
+        /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining), Pure]
+        public static T[] AsKeyStringArray<T>(this ReadOnlySpan<byte> str, byte delimiter = (byte)' ') where T : struct, IKey<T>
+            => T.FromString(str, delimiter);
+
+        /// <summary>
         /// Converts the given bytes into an implementation of <see cref="IKey{T}"/>.
         /// </summary>
         /// <typeparam name="T">The type of key to produce</typeparam>
@@ -151,8 +182,10 @@ namespace wowzer.fs.CASC
             => T.From(bytes);
     }
 
-    // All this code looks stupid but I'm trying to teach the JIT that 0x10 keys is a hot path that should be preferred and optimized.
-    public readonly struct ContentKey : IKey<ContentKey>, IEquatable<ContentKey>
+    public interface IContentKey { }
+
+    // All this code looks stupid but I'm trying to teach the JIT that 16-bytes keys is a hot path that should be preferred and optimized.
+    public readonly struct ContentKey : IKey<ContentKey>, IContentKey
     {
         private readonly IKeyStorage _storage;
 
@@ -166,12 +199,16 @@ namespace wowzer.fs.CASC
 
         [MethodImpl(MethodImplOptions.AggressiveInlining), Pure] 
         public static ContentKey From(ReadOnlySpan<byte> data) => new(data);
+
+        public int Length => _storage.Length;
     }
+
+    public interface IEncodingKey { }
 
     /// <summary>
     /// A so-called encoding key used to identify resources in a CASC file system.
     /// </summary>
-    public readonly struct EncodingKey : IKey<EncodingKey>
+    public readonly struct EncodingKey : IKey<EncodingKey>, IEncodingKey
     {
         private readonly IKeyStorage _storage;
 
@@ -185,10 +222,14 @@ namespace wowzer.fs.CASC
 
         [MethodImpl(MethodImplOptions.AggressiveInlining), Pure] 
         public static EncodingKey From(ReadOnlySpan<byte> data) => new(data);
+
+        public int Length => _storage.Length;
     }
 
     interface IKeyStorage {
         [Pure] public ReadOnlySpan<byte> AsSpan();
+
+        [Pure] public int Length { get; }
     }
 
     [InlineArray(0x10)]
@@ -202,6 +243,8 @@ namespace wowzer.fs.CASC
 
         [MethodImpl(MethodImplOptions.AggressiveInlining), Pure]
         public ReadOnlySpan<byte> AsSpan() => MemoryMarshal.CreateSpan(ref _rawData, 0x10);
+
+        public int Length { get; } = 0x10;
     }
 
     readonly struct HeapKeyStorage : IKeyStorage {
@@ -214,5 +257,7 @@ namespace wowzer.fs.CASC
 
         [MethodImpl(MethodImplOptions.AggressiveInlining), Pure]
         public ReadOnlySpan<byte> AsSpan() => _rawData;
+
+        public int Length => _rawData.Length;
     }
 }

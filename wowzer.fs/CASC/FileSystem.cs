@@ -13,20 +13,22 @@ namespace wowzer.fs.CASC
     public class FileSystem
     {
         private readonly string _dataPath;
+        private readonly Configuration _cdnConfiguration;
+        private readonly Configuration _buildConfiguration;
         private readonly List<Index> _indices = []; // Get rid of the list and use an array later
         private readonly Encoding _encoding = default;
-        private Root _root = default;
+        private readonly Root _root = default;
 
         public FileSystem(string path, string buildCfgPath, string cdnCfgPath)
         {
             _dataPath = path;
 
             // 1. Load configuration files
-            using var bldCfg = FromDisk(path, "config", buildCfgPath);
-            var buildConfig = new Configuration(bldCfg);
+            using (var bldCfg = FromDisk(path, "config", buildCfgPath))
+                _buildConfiguration = new Configuration(bldCfg);
 
-            using var cdnCfg = FromDisk(path, "config", cdnCfgPath);
-            var cdnConfig = new Configuration(cdnCfg);
+            using (var cdnCfg = FromDisk(path, "config", cdnCfgPath))
+                _cdnConfiguration = new Configuration(cdnCfg);
 
             // 2. Load indices
             foreach (var dataFile in Directory.EnumerateFiles($"{path}/Data/data/")) {
@@ -39,7 +41,7 @@ namespace wowzer.fs.CASC
             _indices.Sort((left, right) => left.Bucket.CompareTo(right.Bucket));
 
             // 3. Load encoding
-            var (_, encodingKey) = buildConfig["encoding"].As(ContentKey.From, EncodingKey.From);
+            var (_, encodingKey) = _buildConfiguration["encoding"].As(ContentKey.From, EncodingKey.From);
 
             foreach (var encodingIndex in FindEncodingKey(encodingKey)) {
                 var encodingStream = FromArchive(encodingIndex);
@@ -52,7 +54,7 @@ namespace wowzer.fs.CASC
             }
 
             // 4. Load root
-            var rootKey = buildConfig["root"].As(ContentKey.From);
+            var rootKey = _buildConfiguration["root"].As(ContentKey.From);
             foreach (var rootIndex in FindContentKey(rootKey)) {
                 var rootStream = FromArchive(rootIndex);
                 try {

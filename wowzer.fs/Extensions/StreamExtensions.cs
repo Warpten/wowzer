@@ -55,6 +55,13 @@ namespace wowzer.fs.Extensions
             }
         }
 
+        public static ReadOnlySpan<byte> ReadExactly(this Stream stream, int count)
+        {
+            var buffer = GC.AllocateUninitializedArray<byte>(count);
+            stream.ReadExactly(buffer);
+            return buffer;
+        }
+
         [SkipLocalsInit]
         public static MemoryStream ReadBLTE(this Stream dataStream)
         {

@@ -13,6 +13,7 @@ using Microsoft.VisualBasic;
 
 using wowzer.fs.Extensions;
 using wowzer.fs.IO;
+using wowzer.fs.Utils;
 
 namespace wowzer.fs.CASC
 {
@@ -128,15 +129,11 @@ namespace wowzer.fs.CASC
 
         private static Record[] ParseManifest(Stream dataStream, int recordCount, uint contentFlags, bool allowUnnamedFiles, int[] fdids)
         {
-            var nameHashSize = !(allowUnnamedFiles && (contentFlags & 0x10000000) != 0)
-                ? 8
-                : 0;
+            var nameHashSize = UnsafeUtilities.ToInteger(!(allowUnnamedFiles && (contentFlags & 0x10000000) != 0)) << 3;
+            nameHashSize *= recordCount;
 
             var ckr = new Range(0, recordCount * 16);
-            var nhr = new Range(ckr.End.Value, ckr.End.Value + !(allowUnnamedFiles && (contentFlags & 0x10000000) != 0) switch {
-                true => 8 * recordCount,
-                false => 0
-            });
+            var nhr = new Range(ckr.End.Value, ckr.End.Value + nameHashSize);
 
             var sectionContents = GC.AllocateUninitializedArray<byte>(nhr.End.Value);
             dataStream.ReadExactly(sectionContents);

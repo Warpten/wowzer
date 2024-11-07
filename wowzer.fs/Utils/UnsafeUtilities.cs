@@ -46,6 +46,7 @@ namespace wowzer.fs.Utils
         /// <param name="booleanValue"></param>
         /// <returns></returns>
         public static int ToInteger(bool booleanValue) {
+#pragma warning disable CS0162 // Unreachable code detected
             if (sizeof(bool) == sizeof(byte)) {
                 return (int) Unsafe.As<bool, byte>(ref booleanValue);
             } else if (sizeof(bool) == sizeof(short)) {
@@ -53,8 +54,9 @@ namespace wowzer.fs.Utils
             } else if (sizeof(bool) == sizeof(int)) {
                 return (int) Unsafe.As<bool, int>(ref booleanValue); // ? 8 : 0;
             } else {
-                return booleanValue ? 8u : 0u;
+                return booleanValue ? 1 : 0;
             }
+#pragma warning restore CS0162 // Unreachable code detected
         }
     }
 }

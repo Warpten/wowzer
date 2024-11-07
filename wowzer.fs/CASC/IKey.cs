@@ -202,7 +202,7 @@ namespace wowzer.fs.CASC
         [MethodImpl(MethodImplOptions.AggressiveInlining), Pure] 
         public static ContentKey From(ReadOnlySpan<byte> data) => new(data);
 
-        public int Length => _storage.Length;
+        public int Length => _storage.GetLength();
     }
 
     public interface IEncodingKey { }
@@ -225,13 +225,13 @@ namespace wowzer.fs.CASC
         [MethodImpl(MethodImplOptions.AggressiveInlining), Pure] 
         public static EncodingKey From(ReadOnlySpan<byte> data) => new(data);
 
-        public int Length => _storage.Length;
+        public int Length => _storage.GetLength();
     }
 
     interface IKeyStorage {
         [Pure] public ReadOnlySpan<byte> AsSpan();
 
-        [Pure] public int Length { get; }
+        [Pure] public int GetLength();
     }
 
     [InlineArray(0x10)]
@@ -246,7 +246,7 @@ namespace wowzer.fs.CASC
         [MethodImpl(MethodImplOptions.AggressiveInlining), Pure]
         public ReadOnlySpan<byte> AsSpan() => MemoryMarshal.CreateSpan(ref _rawData, 0x10);
 
-        public int Length { get; } = 0x10;
+        public int GetLength() => 0x10;
     }
 
     readonly struct HeapKeyStorage : IKeyStorage {
@@ -260,6 +260,6 @@ namespace wowzer.fs.CASC
         [MethodImpl(MethodImplOptions.AggressiveInlining), Pure]
         public ReadOnlySpan<byte> AsSpan() => _rawData;
 
-        public int Length => _rawData.Length;
+        public int GetLength() => _rawData.Length;
     }
 }

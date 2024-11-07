@@ -144,7 +144,7 @@ namespace wowzer.fs.CASC
             var records = GC.AllocateUninitializedArray<Record>(recordCount);
             for (var i = 0; i < recordCount; ++i)
             {
-                var contentKey = ContentKey.From(contentKeys.Slice(i * 16, (i + 1) * 16));
+                var contentKey = ContentKey.From(contentKeys.AsSpan().Slice(i * 16, (i + 1) * 16));
                 var nameHash = nameHashes.Remaining switch {
                     >= 8 => nameHashes.ReadBE<ulong>(),
                     _ => 0uL

@@ -93,7 +93,7 @@ namespace wowzer.fs.Extensions
                 switch (encodingMode)
                 {
                     case (byte) 'N':
-                        dataStream.ReadExactly(dst.AsSpan().Slice(writePos, chunk.CompressedSize);
+                        dataStream.ReadExactly(dst.AsSpan().Slice(writePos, chunk.CompressedSize));
                         writePos += chunk.CompressedSize;
                         break;
                     case (byte) 'Z':

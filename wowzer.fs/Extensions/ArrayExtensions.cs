@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -10,6 +12,22 @@ namespace wowzer.fs.Extensions
     public static class ArrayExtensions
     {
         public delegate int BinarySearchPredicate<T, U>(T entry, U arg) where U : allows ref struct;
+
+        /// <summary>
+        /// Returns a given element in an array, bypassing bounds check automatically inserted by the JITter.
+        /// 
+        /// This is semantically equivalen to <pre>arr[index]</pre> but prevents the JIT from emitting bounds checks.
+        /// 
+        /// Note that in return no guarantees are made and you should always make sure the <paramref name="index"/> is within bounds
+        /// yourself.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="arr">The array to index.</param>
+        /// <param name="index">The index of the element to return.</param>
+        /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static T UnsafeIndex<T>(this T[] arr, int index)
+            => Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(arr), index);
 
         /// <summary>
         /// Performs a binary search with the given predicate.

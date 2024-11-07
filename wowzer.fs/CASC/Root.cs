@@ -96,23 +96,19 @@ namespace wowzer.fs.CASC
             if (pageIndex == -1)
                 return null;
 
-            var page = Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_pages), pageIndex);
+            var page = _pages.UnsafeIndex(pageIndex);
 
             var recordIndex = page.Records.BinarySearchBy(record => record.FileDataID.CompareTo(fileDataID));
             if (recordIndex == -1)
                 return null;
 
-            return Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(page.Records), recordIndex);
+            return page.Records.UnsafeIndex(recordIndex);
         }
 
         public Record? FindHash(ulong nameHash)
         {
             if (_hashes.TryGetValue(nameHash, out (int pageIndex, int recordIndex) value))
-            {
-                // Bypass all the bounds checks
-                var page = Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_pages), value.pageIndex);
-                return Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(page.Records), value.recordIndex);
-            }
+                return _pages.UnsafeIndex(value.pageIndex).Records.UnsafeIndex(value.recordIndex);
 
             return null;
         }
@@ -132,6 +128,10 @@ namespace wowzer.fs.CASC
 
         private static Record[] ParseManifest(Stream dataStream, int recordCount, uint contentFlags, bool allowUnnamedFiles, int[] fdids)
         {
+            var nameHashSize = !(allowUnnamedFiles && (contentFlags & 0x10000000) != 0)
+                ? 8
+                : 0;
+
             var ckr = new Range(0, recordCount * 16);
             var nhr = new Range(ckr.End.Value, ckr.End.Value + !(allowUnnamedFiles && (contentFlags & 0x10000000) != 0) switch {
                 true => 8 * recordCount,
@@ -141,8 +141,8 @@ namespace wowzer.fs.CASC
             var sectionContents = GC.AllocateUninitializedArray<byte>(nhr.End.Value);
             dataStream.ReadExactly(sectionContents);
 
-            var contentKeys = sectionContents.AsSpan()[ckr];
-            var nameHashes = new SpanCursor(sectionContents.AsSpan()[nhr]);
+            var contentKeys = sectionContents[ckr];
+            var nameHashes = new SpanCursor(sectionContents[nhr]);
 
             var records = GC.AllocateUninitializedArray<Record>(recordCount);
             for (var i = 0; i < recordCount; ++i)

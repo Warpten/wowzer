@@ -21,6 +21,8 @@ namespace wowzer.fs.CASC
         /// <returns></returns>
         [Pure] public ReadOnlySpan<byte> AsSpan();
 
+        [Pure] public ReadOnlySpan<byte> this[Range index] => AsSpan()[index];
+
         /// <summary>
         /// Accesses the <paramref name="index"/>-th byte of this key.
         /// </summary>

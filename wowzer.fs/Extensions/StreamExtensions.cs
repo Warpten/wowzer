@@ -55,6 +55,7 @@ namespace wowzer.fs.Extensions
             }
         }
 
+        [SkipLocalsInit]
         public static MemoryStream ReadBLTE(this Stream dataStream)
         {
             var magic = dataStream.ReadUInt32LE();
@@ -65,7 +66,7 @@ namespace wowzer.fs.Extensions
             var flags = chunkCount >> 24;
             chunkCount &= 0xFFFFFF;
 
-            var chunkInfo = new ChunkInfo[chunkCount];
+            var chunkInfo = GC.AllocateUninitializedArray<ChunkInfo>((int) chunkCount);
             for (var i = 0; i < chunkCount; ++i)
             {
                 var compressedSize = dataStream.ReadInt32BE();
@@ -99,6 +100,8 @@ namespace wowzer.fs.Extensions
 
                 Debug.Assert(writePos < allocationSize);
             }
+
+            return new MemoryStream(dst);
         }
 
         private record struct ChunkInfo(int CompressedSize, int DecompressedSize, UInt128 Checksum);

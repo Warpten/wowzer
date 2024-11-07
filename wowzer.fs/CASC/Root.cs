@@ -5,11 +5,11 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace wowzer.fs.CASC.Product
+namespace wowzer.fs.CASC
 {
-    public class WoW
+    public class Root
     {
-        public WoW(Stream dataStream)
+        public Root(Stream dataStream)
         {
 
         }

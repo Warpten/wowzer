@@ -46,12 +46,14 @@ namespace wowzer.fs.CASC
             EncodingSpec // NYI
         }
 
+        private readonly Dictionary<ContentKey, Entry> _contentMap = []; // TODO: Calculate expected capacity.
+        private readonly Dictionary<EncodingKey, (uint, ulong)> _encodingMap = []; // ^
+
         public Encoding(Stream dataStream, LoadFlags loadFlags)
         {
             var header = Header.Read(dataStream);
             dataStream.Skip(header.EncodingSpec);
 
-            var contentMap = new Dictionary<ContentKey, Entry>();
             if (loadFlags.HasFlag(LoadFlags.Content))
             {
                 ReadSection(dataStream, header.Content, 1 + 5 + header.Content.KeySize, (ref SpanCursor cursor, Spec spec) =>
@@ -82,15 +84,15 @@ namespace wowzer.fs.CASC
                     }
 
                     var entry = new Entry(keys, fileSize);
-                    contentMap.Add(contentKey, entry);
+                    _contentMap.Add(contentKey, entry);
                 });
+                _contentMap.TrimExcess();
             }
             else
             {
                 dataStream.Skip(header.Content.PageCount * (header.Content.KeySize + 0x10 + header.Content.PageSize));
             }
 
-            var encodingMap = new Dictionary<EncodingKey, (uint, ulong)>();
             if (loadFlags.HasFlag(LoadFlags.Encoding))
             {
                 ReadSection(dataStream, header.Encoding, 4 + 5 + header.Encoding.KeySize, (ref SpanCursor cursor, Spec spec) =>
@@ -108,8 +110,9 @@ namespace wowzer.fs.CASC
 
                     var fileSize = ((ulong) rawFileSize.ReadBE<int>() << 8) | rawFileSize[4];
 
-                    encodingMap.Add(encodingKey, (index, fileSize));
+                    _encodingMap.Add(encodingKey, (index, fileSize));
                 });
+                _encodingMap.TrimExcess();
             }
             else
             {
@@ -117,11 +120,18 @@ namespace wowzer.fs.CASC
             }
         }
 
+        public IEnumerable<EncodingKey> Find(ContentKey contentKey)
+        {
+            if (_contentMap.TryGetValue(contentKey, out var encodingKey))
+                return encodingKey.Keys;
+
+            return [];
+        }
+
         private delegate void SpanParser<T>(ref SpanCursor cursor, Spec spec, T pageHeader);
         private delegate T HeaderParser<T>(ref SpanCursor cursor, Spec spec);
 
-        private static void ReadSection<T>(Stream dataStream, Spec spec, int size, HeaderParser<T> header, SpanParser<T> parser)
-        {
+        private static void ReadSection<T>(Stream dataStream, Spec spec, int size, HeaderParser<T> header, SpanParser<T> parser) {
             var pagesSize = spec.PageCount * (spec.KeySize + 0x10 + spec.PageSize);
 
             var section = ArrayPool<byte>.Shared.Rent(pagesSize);

@@ -47,7 +47,14 @@ namespace wowzer.fs.CASC
 
         public delegate int BinarySearchPredicate<T>(Entry entry, T arg) where T : allows ref struct;
 
-        public int? BinarySearchBy<T>(BinarySearchPredicate<T> cmp, T arg) where T : allows ref struct {
+        /// <summary>
+        /// Performs a binary search with the given predicate.
+        /// </summary>
+        /// <typeparam name="T">An argument to carry around to the predicate.</typeparam>
+        /// <param name="cmp">A predicate to use to determine ordering.</param>
+        /// <param name="arg">An extra argument to pass to the predicate.</param>
+        /// <returns>The index of a corresponding entry or -1 if none was found.</returns>
+        public int BinarySearchBy<T>(BinarySearchPredicate<T> cmp, T arg) where T : allows ref struct {
             var size = Length;
             var left = 0;
             var right = size;
@@ -77,7 +84,7 @@ namespace wowzer.fs.CASC
             }
 
             Debug.Assert(left < Length);
-            return null;
+            return -1;
         }
 
         public Entry this[int index]
@@ -87,9 +94,20 @@ namespace wowzer.fs.CASC
                 var range = new Range(index * Spec.Length, (index + 1) * Spec.Length);
 
                 if (range.End.Value < _rawData.Length)
-                    return new Entry(_rawData.AsSpan()[range], Spec);
+                    return new Entry(_rawData[range], Spec);
                 else
                     return default;
+            }
+        }
+
+        public IEnumerable<Entry> this[Range range]
+        {
+            get
+            {
+                for (var i = range.Start.Value; i < range.End.Value; ++i) {
+                    var projectedSpan = new Range(i * Spec.Length, (i + 1) * Spec.Length);
+                    yield return new Entry(_rawData[projectedSpan], Spec);
+                }
             }
         }
 

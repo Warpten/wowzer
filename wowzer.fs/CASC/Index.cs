@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Buffers;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -100,16 +101,7 @@ namespace wowzer.fs.CASC
             }
         }
 
-        public IEnumerable<Entry> this[Range range]
-        {
-            get
-            {
-                for (var i = range.Start.Value; i < range.End.Value; ++i) {
-                    var projectedSpan = new Range(i * Spec.Length, (i + 1) * Spec.Length);
-                    yield return new Entry(_rawData[projectedSpan], Spec);
-                }
-            }
-        }
+        public IEnumerable<Entry> this[Range range] => new EntryEnumerable(this, range.Start.Value, range.End.Value);
 
         public int Bucket { get; init; }
         public int Length { get; init; }
@@ -181,5 +173,35 @@ namespace wowzer.fs.CASC
             public readonly int Length => Size.End.Value;
         }
 
+        class EntryEnumerable(Index index, int lowerBound, int upperBound) : IEnumerable<Entry>, IEnumerator<Entry>
+        {
+            private readonly Index _index = index;
+            private readonly int _lowerBound = lowerBound;
+            private readonly int _upperBound = upperBound;
+            private int _current = lowerBound;
+
+            public Entry Current {
+                get {
+                    var projectedSpan = new Range(_current * _index.Spec.Length, (_current + 1) * _index.Spec.Length);
+                    return new Entry(_index._rawData[projectedSpan], _index.Spec);
+                }
+            }
+
+            object IEnumerator.Current => throw new InvalidOperationException();
+
+            public void Dispose() { }
+
+            public IEnumerator<Entry> GetEnumerator() => this;
+
+            public bool MoveNext()
+            {
+                ++_current;
+                return _current < _upperBound;
+            }
+
+            public void Reset() => _current = _lowerBound;
+
+            IEnumerator IEnumerable.GetEnumerator() => this;
+        }
     }
 }

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -82,9 +83,9 @@ namespace wowzer.fs.CASC
         }
 
         private IEnumerable<Index.Entry> FindContentKey(ContentKey contentKey) {
-            foreach (var encodingKey in _encoding.Find(contentKey))
-                foreach (var indexEntry in FindEncodingKey(encodingKey))
-                    yield return indexEntry;
+            return _encoding.Find(contentKey)
+                .Select(encodingKey => FindEncodingKey(encodingKey))
+                .Flatten();
         }
 
         /// <summary>

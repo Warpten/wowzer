@@ -7,38 +7,36 @@ namespace wowzer.fs.Extensions
 {
     public static class EnumerableExtensions
     {
-        public static IEnumerable<T> Flatten<T>(this IEnumerable<IEnumerable<T>> source) where T : allows ref struct
-            => new FlatteningRefEnumerator<T>(source);
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static IEnumerable<TValue> Flatten<TValue>(this IEnumerable<IEnumerable<TValue>> source)
+            where TValue : allows ref struct
+            => new FlatteningRefEnumerable<IEnumerable<TValue>, TValue>(source);
 
-        private class FlatteningRefEnumerator<T> : IEnumerable<T>, IEnumerator<T> where T : allows ref struct
+        private class FlatteningRefEnumerable<TEnumerator, TValue> : IEnumerable<TValue>, IEnumerator<TValue>
+            where TEnumerator : IEnumerable<TValue>
+            where TValue : allows ref struct
         {
-            private readonly IEnumerator<IEnumerable<T>> _source;
-            private IEnumerator<T> _current = null;
+            private readonly IEnumerator<TEnumerator> _source;
+            private IEnumerator<TValue> _current;
 
-            public FlatteningRefEnumerator(IEnumerable<IEnumerable<T>> source)
-            {
+            public FlatteningRefEnumerable(IEnumerable<TEnumerator> source) {
                 _source = source.GetEnumerator();
                 if (_source.MoveNext())
                     _current = _source.Current.GetEnumerator();
             }
 
-            public T Current => _current.Current;
+            public TValue Current => _current.Current;
+            object IEnumerator.Current => throw new NotImplementedException();
 
-            // object IEnumerator.Current => RuntimeHelpers.IsReferenceOrContainsReferences<T>()
-            //     ? throw new InvalidOperationException()
-            //    : _current.Current;
-            object IEnumerator.Current => throw new InvalidOperationException();
-
-
-            public void Dispose() { }
+            public void Dispose() { _current = null; }
 
             public bool MoveNext()
             {
                 if (_current == null)
                     return false;
 
-                var movedNext = _current.MoveNext();
-                if (!movedNext) {
+                var moved = _current.MoveNext();
+                if (!moved) {
                     if (!_source.MoveNext())
                         return false;
 
@@ -50,7 +48,7 @@ namespace wowzer.fs.Extensions
 
             public void Reset() => throw new InvalidOperationException();
 
-            public IEnumerator<T> GetEnumerator() => this;
+            public IEnumerator<TValue> GetEnumerator() => this;
             IEnumerator IEnumerable.GetEnumerator() => this;
         }
     }

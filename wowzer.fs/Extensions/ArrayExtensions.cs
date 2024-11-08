@@ -11,8 +11,6 @@ namespace wowzer.fs.Extensions
 {
     public static class ArrayExtensions
     {
-        public delegate int BinarySearchPredicate<T, U>(T entry, U arg) where U : allows ref struct;
-
         /// <summary>
         /// Returns a given element in an array, bypassing bounds check automatically inserted by the JITter.
         /// 
@@ -28,6 +26,26 @@ namespace wowzer.fs.Extensions
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static T UnsafeIndex<T>(this T[] arr, int index)
             => Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(arr), index);
+
+        public enum Ordering
+        {
+            Less,
+            Equal,
+            Greater,
+        }
+
+        public static Ordering ToOrdering(this int comparison)
+        {
+            return comparison switch
+            {
+                > 0 => Ordering.Greater,
+                < 0 => Ordering.Less,
+                0 => Ordering.Equal,
+            };
+        }
+
+        public delegate Ordering BinarySearchPredicate<T>(T entry);
+        public delegate Ordering BinarySearchPredicate<T, U>(T entry, U arg) where U : allows ref struct;
 
         /// <summary>
         /// Performs a binary search with the given predicate.
@@ -50,13 +68,13 @@ namespace wowzer.fs.Extensions
 
                 left = ordering switch
                 {
-                    -1 => mid + 1,
+                    Ordering.Less => mid + 1,
                     _ => left
                 };
 
                 right = ordering switch
                 {
-                    1 => mid,
+                    Ordering.Greater => mid,
                     _ => right
                 };
 
@@ -72,8 +90,6 @@ namespace wowzer.fs.Extensions
             Debug.Assert(left < array.Length);
             return -1;
         }
-
-        public delegate int BinarySearchPredicate<T>(T entry);
 
         /// <summary>
         /// Performs a binary search with the given predicate.
@@ -96,13 +112,13 @@ namespace wowzer.fs.Extensions
 
                 left = ordering switch
                 {
-                    -1 => mid + 1,
+                    Ordering.Less => mid + 1,
                     _ => left
                 };
 
                 right = ordering switch
                 {
-                    1 => mid,
+                    Ordering.Greater => mid,
                     _ => right
                 };
 

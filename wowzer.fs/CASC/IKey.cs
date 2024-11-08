@@ -253,7 +253,7 @@ namespace wowzer.fs.CASC
         private readonly byte[] _rawData;
 
         [Pure] public HeapKeyStorage(ReadOnlySpan<byte> sourceData) {
-            _rawData = GC.AllocateUninitializedArray<byte>(sourceData.Length);
+            _rawData = new byte[sourceData.Length];
             sourceData.CopyTo(_rawData);
         }
 

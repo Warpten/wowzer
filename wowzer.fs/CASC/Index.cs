@@ -110,47 +110,6 @@ namespace wowzer.fs.CASC
 
         public EntrySpec Spec { get; init; }
 
-        public readonly ref struct Entry(ReadOnlySpan<byte> rawData, EntrySpec spec)
-        {
-            private readonly ReadOnlySpan<byte> _rawData = rawData;
-            private readonly EntrySpec _spec = spec;
-
-            public ReadOnlySpan<byte> Key => _rawData[_spec.Key];
-            public long Size
-            {
-                get
-                {
-                    var data = _rawData[_spec.Size];
-
-                    var size = 0L; // Little endian
-                    for (var i = 0; i < data.Length; ++i)
-                        size |= (long) data[i] << (8 * i);
-
-                    return size;
-                }
-            }
-
-            public (long ArchiveIndex, long ArchiveOffset) Offset
-            {
-                get
-                {
-                    var data = _rawData[_spec.Offset];
-
-                    var rawData = 0L; // Big endian
-                    for (var i = 0; i < data.Length; ++i)
-                        rawData = (rawData << 8) | data[i];
-
-                    var archiveBits = _spec.Offset.Count() * 8 - _spec.OffsetBits;
-                    var offsetBits = _spec.OffsetBits;
-
-                    return (
-                        (rawData >> offsetBits) & ((1 << archiveBits) - 1),
-                        rawData & ((1 << offsetBits) - 1)
-                    );
-                }
-            }
-        }
-
         public readonly record struct EntrySpec
         {
             public readonly Range Key;

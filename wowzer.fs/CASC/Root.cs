@@ -15,6 +15,8 @@ using wowzer.fs.Extensions;
 using wowzer.fs.IO;
 using wowzer.fs.Utils;
 
+using static wowzer.fs.Extensions.ArrayExtensions;
+
 namespace wowzer.fs.CASC
 {
     public class Root
@@ -87,11 +89,11 @@ namespace wowzer.fs.CASC
         {
             var pageIndex = _pages.BinarySearchBy(page => {
                 if (fileDataID < page.Records[0].FileDataID)
-                    return -1;
-                else if (fileDataID <= page.Records[^0].FileDataID)
-                    return 0;
+                    return Ordering.Less;
+                else if (fileDataID <= page.Records[^1].FileDataID)
+                    return Ordering.Equal;
                 else
-                    return 1;
+                    return Ordering.Greater;
             });
 
             if (pageIndex == -1)
@@ -99,7 +101,7 @@ namespace wowzer.fs.CASC
 
             var page = _pages.UnsafeIndex(pageIndex);
 
-            var recordIndex = page.Records.BinarySearchBy(record => record.FileDataID.CompareTo(fileDataID));
+            var recordIndex = page.Records.BinarySearchBy(record => record.FileDataID.CompareTo(fileDataID).ToOrdering());
             if (recordIndex == -1)
                 return null;
 

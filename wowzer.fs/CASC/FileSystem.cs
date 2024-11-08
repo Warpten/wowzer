@@ -16,7 +16,7 @@ namespace wowzer.fs.CASC
         private readonly string _dataPath;
         private readonly Configuration _cdnConfiguration;
         private readonly Configuration _buildConfiguration;
-        private readonly List<Index> _indices = []; // Get rid of the list and use an array later
+        private readonly Index[] _indices = [];
         private readonly Encoding _encoding = default;
         private readonly Root _root = default;
 
@@ -32,20 +32,25 @@ namespace wowzer.fs.CASC
                 _cdnConfiguration = new Configuration(cdnCfg);
 
             // 2. Load indices
+            var indices = new List<Index>();
             foreach (var dataFile in Directory.EnumerateFiles($"{path}/Data/data/")) {
                 if (!dataFile.EndsWith(".idx"))
                     continue;
 
                 using var fileStream = File.OpenRead(dataFile);
-                _indices.Add(new Index(fileStream));
+                indices.Add(new Index(fileStream));
             }
-            _indices.Sort((left, right) => left.Bucket.CompareTo(right.Bucket));
+            indices.Sort((left, right) => left.Bucket.CompareTo(right.Bucket));
+            _indices = [.. indices];
 
             // 3. Load encoding
-            var (_, encodingKey) = _buildConfiguration["encoding"].As(ContentKey.From, EncodingKey.From);
+            var (_, encodingKey) = _buildConfiguration["encoding"].As(
+                data => data.AsKeyString<ContentKey>(),
+                data => data.AsKeyString<EncodingKey>()
+            );
 
             foreach (var encodingIndex in FindEncodingKey(encodingKey)) {
-                var encodingStream = FromArchive(encodingIndex);
+                var encodingStream = Open(encodingIndex);
                 try {
                     _encoding = new Encoding(encodingStream, Encoding.LoadFlags.Content);
                     break;
@@ -54,10 +59,13 @@ namespace wowzer.fs.CASC
                 }
             }
 
+            if (_encoding == null)
+                throw new InvalidOperationException("Could not load encoding");
+
             // 4. Load root
             var rootKey = _buildConfiguration["root"].As(ContentKey.From);
             foreach (var rootIndex in FindContentKey(rootKey)) {
-                var rootStream = FromArchive(rootIndex);
+                var rootStream = Open(rootIndex);
                 try {
                     _root = new Root(rootStream);
                     break;
@@ -70,32 +78,96 @@ namespace wowzer.fs.CASC
         private static FileStream FromDisk(string rootDirectory, string subdirectory, string hash)
             => File.OpenRead($"{rootDirectory}/Data/{subdirectory}/{hash.AsSpan()[0..2]}/{hash.AsSpan()[2..4]}/{hash}");
 
-        private Stream FromArchive(Index.Entry indexEntry) {
-            var (archiveIndex, archiveOffset) = indexEntry.Offset;
-            var size = indexEntry.Size;
+        // Yes, this is stupid, but bypasses exceptions from File.OpenRead.
+        // Consider switching to native APIs on Windows?
+        private static FileStream TryFromDisk(string rootDirectory, string subdirectory, string hash)
+        {
+            var filePath = $"{rootDirectory}/Data/{subdirectory}/{hash.AsSpan()[0..2]}/{hash.AsSpan()[2..4]}/{hash}";
+            if (File.Exists(filePath))
+                return File.OpenRead(filePath);
 
-            var diskStream = FromDisk(_dataPath, "data", $"data.{archiveIndex:03}");
-            // Skip over the header preceding the BLTE data.
-            // TODO: Probably fix this to validate said header instead?
-            diskStream.Seek(archiveOffset + 0x10 + 4 + 2 + 4 + 4, SeekOrigin.Current);
-
-            return diskStream.ReadBLTE();
+            return null;
         }
 
-        private IEnumerable<Index.Entry> FindContentKey(ContentKey contentKey) {
+        /// <summary>
+        /// Opens a stream over a file's content. This operation is greedy and loads the entire file in memory.
+        /// </summary>
+        /// <param name="fileEntry"> And entry identifying the file in this filesystem.</param>
+        /// <returns></returns>
+        public MemoryStream Open(Entry fileEntry) {
+            var (archiveIndex, archiveOffset) = fileEntry.Offset;
+            // var size = fileEntry.Size; // TODO: Validate that we read the correct amount of bytes
+
+            var diskStream = TryFromDisk(_dataPath, "data", $"data.{archiveIndex:03}");
+            if (diskStream != null)
+            {
+                // Skip over the header preceding the BLTE data.
+                // TODO: Probably fix this to validate said header instead?
+                diskStream.Seek(archiveOffset + 0x10 + 4 + 2 + 4 + 4, SeekOrigin.Current);
+                return diskStream.ReadBLTE();
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Finds all known file entries given a <see cref="ContentKey">.
+        /// </summary>
+        /// <param name="contentKey"></param>
+        /// <returns></returns>
+        public IEnumerable<Entry> FindContentKey(ContentKey contentKey) {
             return _encoding.Find(contentKey)
-                .Select(encodingKey => FindEncodingKey(encodingKey))
+                .Select(FindEncodingKey)
                 .Flatten();
         }
 
         /// <summary>
-        /// Finds all index entries that match a specific encoding key.
+        /// Finds all known file entries given the file's path's Jenkins96 hash.
         /// </summary>
-        /// <typeparam name="T">An implementation of an encoding key.</typeparam>
+        /// <param name="nameHash"></param>
+        /// <returns></returns>
+        public IEnumerable<Entry> FindNameHash(ulong nameHash)
+        {
+            if (_root == null)
+                return [];
+
+            var rootRecord = _root.FindHash(nameHash);
+            if (rootRecord == null)
+                return [];
+
+            return FindContentKey(rootRecord.ContentKey);
+        }
+
+        /// <summary>
+        /// Finds all known file entries given its ID.
+        /// </summary>
+        /// <param name="fileDataID">The file's ID</param>
+        /// <returns></returns>
+        public IEnumerable<Entry> FindFileDataID(int fileDataID)
+        {
+            if (_root == null)
+                return [];
+
+            var rootRecord = _root.FindFileDataID(fileDataID);
+            if (rootRecord == null)
+                return [];
+
+            return FindContentKey(rootRecord.ContentKey);
+        }
+
+        /// <summary>
+        /// Finds all known file entries given an <see cref="EncodingKey"/>.
+        /// </summary>
         /// <param name="encodingKey">The encoding key to look for.</param>
         /// <returns>An enumeration of all known index entries.</returns>
-        /// <remarks><typeparamref name="T"/> is needed to because this function needs access to <see cref="IKey{T}.this[int]"/></remarks>
-        private IEnumerable<Index.Entry> FindEncodingKey<T>(T encodingKey)
+        private IEnumerable<Entry> FindEncodingKey(EncodingKey encodingKey)
+            => FindEncodingKeyImpl(encodingKey);
+
+        /// <remarks>
+        ///  <typeparamref name="T"/> is needed to because this function needs access to <see cref="IKey{T}.this[int]"/>.
+        ///  This avoids boxing and the language can devirtualize.
+        /// </remarks>
+        private IEnumerable<Entry> FindEncodingKeyImpl<T>(T encodingKey)
             where T : IKey<T>, IEncodingKey
         {
             Debug.Assert(encodingKey.Length >= 9);
@@ -106,12 +178,13 @@ namespace wowzer.fs.CASC
                 bucketIndex ^= encodingKey[i];
             bucketIndex = (byte) ((bucketIndex & 0xF) ^ (bucketIndex >> 4));
 
-            var index = _indices[bucketIndex];
+            Debug.Assert(bucketIndex < _indices.Length);
+            var index = _indices.UnsafeIndex(bucketIndex);
 
             // Adjust the provided encoding key to the amount of bytes known to the index.
             var lookup = encodingKey[index.Spec.Key];
 
-            var lowerBound = index.BinarySearchBy((entry, lookup) => {
+            var lowerBound = index.BinarySearchBy(static (entry, lookup) => {
                 var comparison = lookup.SequenceCompareTo(entry.Key);
                 if (comparison == 0)
                     return 1;
@@ -119,7 +192,7 @@ namespace wowzer.fs.CASC
                 return comparison;
             }, lookup);
 
-            var upperBound = index.BinarySearchBy((entry, lookup) => {
+            var upperBound = index.BinarySearchBy(static (entry, lookup) => {
                 var comparison = lookup.SequenceCompareTo(entry.Key);
                 if (comparison == 0)
                     return -1;

@@ -149,7 +149,7 @@ namespace wowzer.fs.CASC
 
             ArrayPool<byte>.Shared.Return(section, false);
         }
-    }
 
-    internal record struct Entry(List<EncodingKey> Keys, ulong FileSize);
+        record struct Entry(List<EncodingKey> Keys, ulong FileSize);
+    }
 }

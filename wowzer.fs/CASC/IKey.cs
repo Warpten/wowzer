@@ -36,11 +36,10 @@ namespace wowzer.fs.CASC
         /// </summary>
         public int Length { get; }
 
+        bool IEquatable<T>.Equals(T? other) => other != null && other.AsSpan().SequenceEqual(AsSpan());
+        int IComparable<T>.CompareTo(T? other) => other != null ? other.AsSpan().SequenceCompareTo(AsSpan()) : -1;
+
         [Pure] internal static abstract T From(ReadOnlySpan<byte> data);
-
-        bool IEquatable<T>.Equals(T other) => other.AsSpan().SequenceEqual(AsSpan());
-
-        int IComparable<T>.CompareTo(T other) => other.AsSpan().SequenceCompareTo(AsSpan());
 
         [Pure, SkipLocalsInit] internal static virtual T[] FromString(ReadOnlySpan<byte> str, byte delimiter)
         {
@@ -159,7 +158,7 @@ namespace wowzer.fs.CASC
         /// <param name="str">An ASCII hex string to parse.</param>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining), Pure]
-        public static T AsKeyString<T>(this ReadOnlySpan<byte> str) where T : struct, IKey<T>
+        public static T AsKeyString<T>(this ReadOnlySpan<byte> str) where T : IKey<T>
             => T.FromString(str);
 
         /// <summary>
@@ -170,7 +169,7 @@ namespace wowzer.fs.CASC
         /// <param name="delimiter">A delimiter indicating how to split the given <paramref name="str"/>.
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining), Pure]
-        public static T[] AsKeyStringArray<T>(this ReadOnlySpan<byte> str, byte delimiter = (byte)' ') where T : struct, IKey<T>
+        public static T[] AsKeyStringArray<T>(this ReadOnlySpan<byte> str, byte delimiter = (byte)' ') where T : IKey<T>
             => T.FromString(str, delimiter);
 
         /// <summary>
@@ -180,14 +179,14 @@ namespace wowzer.fs.CASC
         /// <param name="bytes">The bytes to treat as a <typeparamref name="T"/></param>.
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining), Pure]
-        public static T AsKey<T>(this ReadOnlySpan<byte> bytes) where T : struct, IKey<T>
+        public static T AsKey<T>(this ReadOnlySpan<byte> bytes) where T : IKey<T>
             => T.From(bytes);
     }
 
     public interface IContentKey { }
 
     // All this code looks stupid but I'm trying to teach the JIT that 16-bytes keys is a hot path that should be preferred and optimized.
-    public readonly struct ContentKey : IKey<ContentKey>, IContentKey
+    public class ContentKey : IKey<ContentKey>, IContentKey
     {
         private readonly IKeyStorage _storage;
 
@@ -197,7 +196,7 @@ namespace wowzer.fs.CASC
                 : new HeapKeyStorage(data);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining), Pure] 
-        public readonly ReadOnlySpan<byte> AsSpan() => _storage.AsSpan();
+        public ReadOnlySpan<byte> AsSpan() => _storage.AsSpan();
 
         [MethodImpl(MethodImplOptions.AggressiveInlining), Pure] 
         public static ContentKey From(ReadOnlySpan<byte> data) => new(data);
@@ -210,7 +209,7 @@ namespace wowzer.fs.CASC
     /// <summary>
     /// A so-called encoding key used to identify resources in a CASC file system.
     /// </summary>
-    public readonly struct EncodingKey : IKey<EncodingKey>, IEncodingKey
+    public class EncodingKey : IKey<EncodingKey>, IEncodingKey
     {
         private readonly IKeyStorage _storage;
 
@@ -220,7 +219,7 @@ namespace wowzer.fs.CASC
                 : new HeapKeyStorage(data);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining), Pure]
-        public readonly ReadOnlySpan<byte> AsSpan() => _storage.AsSpan();
+        public ReadOnlySpan<byte> AsSpan() => _storage.AsSpan();
 
         [MethodImpl(MethodImplOptions.AggressiveInlining), Pure] 
         public static EncodingKey From(ReadOnlySpan<byte> data) => new(data);

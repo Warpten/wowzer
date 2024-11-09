@@ -7,6 +7,8 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
+using wowzer.fs.Utils;
+
 namespace wowzer.fs.Extensions
 {
     public static class ArrayExtensions
@@ -26,23 +28,6 @@ namespace wowzer.fs.Extensions
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static T UnsafeIndex<T>(this T[] arr, int index)
             => Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(arr), index);
-
-        public enum Ordering
-        {
-            Less,
-            Equal,
-            Greater,
-        }
-
-        public static Ordering ToOrdering(this int comparison)
-        {
-            return comparison switch
-            {
-                > 0 => Ordering.Greater,
-                < 0 => Ordering.Less,
-                0 => Ordering.Equal,
-            };
-        }
 
         public delegate Ordering BinarySearchPredicate<T>(T entry);
         public delegate Ordering BinarySearchPredicate<T, U>(T entry, U arg) where U : allows ref struct;

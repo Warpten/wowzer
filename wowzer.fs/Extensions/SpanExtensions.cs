@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -7,6 +8,7 @@ using System.Reflection.Metadata;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
 
 namespace wowzer.fs.Extensions
 {
@@ -127,79 +129,102 @@ namespace wowzer.fs.Extensions
         [MethodImpl(MethodImplOptions.AggressiveInlining), SkipLocalsInit]
         public static unsafe void ReverseEndianness<T>(this Span<T> value) where T : unmanaged, IBinaryInteger<T>
         {
-            var valueSpan = MemoryMarshal.AsBytes(value);
-            ref byte byteRef = ref MemoryMarshal.GetReference(valueSpan);
-            ref T sourceRef = ref MemoryMarshal.GetReference(value);
-
-            int i = 0;
-
-            var iterationCount = value.Length - Vector256<T>.Count;
-            if (Vector256.IsHardwareAccelerated && i <= iterationCount)
+            if (typeof(T) == typeof(UInt128) || typeof(T) == typeof(Int128))
             {
-                var swizzle = MakeSwizzle256Fast<T>();
+                // Treat as ulongs and reverse those.
+                var inversable = MemoryMarshal.Cast<T, ulong>(value);
+                inversable.ReverseEndianness();
 
-                while (i <= iterationCount)
-                {
-                    var source = Vector256.LoadUnsafe(ref sourceRef, (uint) i).AsByte();
-
-                    Vector256.StoreUnsafe(
-                        Vector256.Shuffle(source, swizzle).As<byte, T>(),
-                        ref sourceRef,
-                        (uint)i);
-                    i += Vector256<T>.Count;
-                }
+                // Exchange lower and upper
+                // TODO: Is there any way to vectorize this?
+                for (var i = 0; i < inversable.Length; i += 2)
+                    (inversable[i], inversable[i + 1]) = (inversable[i], inversable[i + 1]);
             }
-
-            iterationCount = value.Length - Vector128<T>.Count;
-            if (Vector128.IsHardwareAccelerated && i <= iterationCount)
+            else
             {
-                var swizzle = MakeSwizzle128Fast<T>();
+                var valueSpan = MemoryMarshal.AsBytes(value);
+                ref byte byteRef = ref MemoryMarshal.GetReference(valueSpan);
+                ref T sourceRef = ref MemoryMarshal.GetReference(value);
 
-                while (i <= iterationCount)
+                int i = 0;
+
+                if (Vector256.IsHardwareAccelerated)
                 {
-                    var source = Vector128.LoadUnsafe(ref sourceRef, (uint) i).AsByte();
+                    var iterationCount = value.Length - Vector256<T>.Count;
+                    if (i <= iterationCount)
+                    {
+                        var swizzle = MakeSwizzle256Fast<T>();
 
-                    Vector128.StoreUnsafe(
-                        Vector128.Shuffle(source, swizzle).As<byte, T>(),
-                        ref sourceRef,
-                        (uint)i);
-                    i += Vector128<T>.Count;
-                }
-            }
+                        while (i <= iterationCount)
+                        {
+                            var source = Vector256.LoadUnsafe(ref sourceRef, (uint)i).AsByte();
 
-            // Is this worth the effort?
-            iterationCount = value.Length - Vector64<T>.Count;
-            if (Vector64.IsHardwareAccelerated && i <= iterationCount)
-            {
-                var swizzle = MakeSwizzle64Fast<T>();
-
-                while (i <= iterationCount)
-                {
-                    var source = Vector64.LoadUnsafe(ref sourceRef, (uint) i).AsByte();
-
-                    Vector64.StoreUnsafe(
-                        Vector64.Shuffle(source, swizzle).As<byte, T>(),
-                        ref sourceRef,
-                        (uint)i);
-                    i += Vector64<T>.Count;
-                }
-            }
-
-            i *= Unsafe.SizeOf<T>();
-            while (i < valueSpan.Length)
-            {
-                for (int j = 0, k = Unsafe.SizeOf<T>() - 1; j < k; ++j, --k)
-                {
-                    var leftIndex = i + j;
-                    var rightIndex = i + k;
-
-                    ref byte leftByte = ref Unsafe.Add(ref byteRef, leftIndex);
-                    ref byte rightByte = ref Unsafe.Add(ref byteRef, rightIndex);
-
-                    (rightByte, leftByte) = (leftByte, rightByte);
+                            Vector256.StoreUnsafe(
+                                Vector256.Shuffle(source, swizzle).As<byte, T>(),
+                                ref sourceRef,
+                                (uint)i);
+                            i += Vector256<T>.Count;
+                        }
+                    }
                 }
 
-                i += Unsafe.SizeOf<T>();
+                if (Vector128.IsHardwareAccelerated)
+                {
+                    var iterationCount = value.Length - Vector128<T>.Count;
+                    if (i <= iterationCount)
+                    {
+                        var swizzle = MakeSwizzle128Fast<T>();
+
+                        while (i <= iterationCount)
+                        {
+                            var source = Vector128.LoadUnsafe(ref sourceRef, (uint)i).AsByte();
+
+                            Vector128.StoreUnsafe(
+                                Vector128.Shuffle(source, swizzle).As<byte, T>(),
+                                ref sourceRef,
+                                (uint)i);
+                            i += Vector128<T>.Count;
+                        }
+                    }
+                }
+
+                // Is this worth the effort?
+                if (Vector64.IsHardwareAccelerated)
+                {
+                    var iterationCount = value.Length - Vector64<T>.Count;
+                    if (i <= iterationCount)
+                    {
+                        var swizzle = MakeSwizzle64Fast<T>();
+
+                        while (i <= iterationCount)
+                        {
+                            var source = Vector64.LoadUnsafe(ref sourceRef, (uint)i).AsByte();
+
+                            Vector64.StoreUnsafe(
+                                Vector64.Shuffle(source, swizzle).As<byte, T>(),
+                                ref sourceRef,
+                                (uint)i);
+                            i += Vector64<T>.Count;
+                        }
+                    }
+                }
+
+                i *= Unsafe.SizeOf<T>();
+                while (i < valueSpan.Length)
+                {
+                    for (int j = 0, k = Unsafe.SizeOf<T>() - 1; j < k; ++j, --k)
+                    {
+                        var leftIndex = i + j;
+                        var rightIndex = i + k;
+
+                        ref byte leftByte = ref Unsafe.Add(ref byteRef, leftIndex);
+                        ref byte rightByte = ref Unsafe.Add(ref byteRef, rightIndex);
+
+                        (rightByte, leftByte) = (leftByte, rightByte);
+                    }
+
+                    i += Unsafe.SizeOf<T>();
+                }
             }
         }
 

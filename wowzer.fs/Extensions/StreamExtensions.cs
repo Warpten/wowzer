@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -8,6 +9,8 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
+
+using wowzer.fs.Utils;
 
 namespace wowzer.fs.Extensions
 {
@@ -47,6 +50,7 @@ namespace wowzer.fs.Extensions
                 stream.Seek(count, SeekOrigin.Current);
             else
             {
+                // TODO: Avoid this for paths where count < nuint
                 var bufferSize = Math.Min(2048, (count + 1) & -2);
                 Span<byte> buffer = GC.AllocateUninitializedArray<byte>(bufferSize);
                 for (var i = 0; i < count / bufferSize; ++i)
@@ -80,7 +84,7 @@ namespace wowzer.fs.Extensions
                 var decompressedSize = dataStream.ReadInt32BE();
 
                 var checksum = dataStream.ReadUInt128BE();
-                chunkInfo[i] = new(compressedSize, decompressedSize, checksum);
+                chunkInfo[i] = new(compressedSize - 1, decompressedSize, checksum);
             }
 
             var allocationSize = chunkInfo.Sum(ci => ci.DecompressedSize);
@@ -97,20 +101,24 @@ namespace wowzer.fs.Extensions
                         writePos += chunk.CompressedSize;
                         break;
                     case (byte) 'Z':
-                        using (var deflate = new DeflateStream(dataStream, CompressionMode.Decompress))
-                            deflate.ReadExactly(dst.AsSpan().Slice(writePos, chunk.DecompressedSize));
+                        using (var compressedSource = dataStream.ReadSlice(chunk.CompressedSize))
+                        using (var writeTarget = new UnsafeSpanStream(dst.AsSpan().Slice(writePos)))
+                        using (var dataSource = new ZLibStream(compressedSource, CompressionMode.Decompress, true))
+                            dataSource.CopyTo(writeTarget);
                         writePos += chunk.DecompressedSize;
                         break;
                     default:
                         throw new NotImplementedException();
                 }
 
-                Debug.Assert(writePos < allocationSize);
+                Debug.Assert(writePos <= allocationSize);
             }
 
             return new MemoryStream(dst);
         }
 
         private record struct ChunkInfo(int CompressedSize, int DecompressedSize, UInt128 Checksum);
+
+        public static Stream ReadSlice(this Stream stream, long length) => new LimitedStream(stream, length);
     }
 }

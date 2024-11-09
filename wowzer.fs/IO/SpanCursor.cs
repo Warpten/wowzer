@@ -21,6 +21,12 @@ namespace wowzer.fs.IO
 
         public SpanCursor(Span<byte> data) => _data = data;
 
+        public SpanCursor(Span<byte> data, int offset, int length)
+            => _data = data.Slice(offset, length);
+
+        public SpanCursor(Span<byte> data, int offset)
+            => _data = data.Slice(offset);
+
         public readonly int Remaining => _data.Length - _offset;
         public readonly int Length => _data.Length;
         public int Position
@@ -41,9 +47,9 @@ namespace wowzer.fs.IO
 
         public sbyte ReadInt8() => (sbyte) ReadUInt8();
 
-        public Span<byte> Consume(int offset)
+        public Span<byte> ReadSlice(int offset)
         {
-            var value = _data[..offset];
+            var value = _data.Slice(_offset, offset);
             _offset += offset;
             return value;
         }

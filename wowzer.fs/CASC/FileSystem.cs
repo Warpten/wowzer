@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 using wowzer.fs.Extensions;
+using wowzer.fs.Utils;
 
 namespace wowzer.fs.CASC
 {
@@ -17,18 +18,18 @@ namespace wowzer.fs.CASC
         private readonly Configuration _cdnConfiguration;
         private readonly Configuration _buildConfiguration;
         private readonly Index[] _indices = [];
-        private readonly Encoding _encoding = default;
-        private readonly Root _root = default;
+        private readonly Encoding _encoding;
+        private readonly Root? _root;
 
         public FileSystem(string path, string buildCfgPath, string cdnCfgPath)
         {
             _dataPath = path;
 
             // 1. Load configuration files
-            using (var bldCfg = FromDisk(path, "config", buildCfgPath))
+            using (var bldCfg = OpenConfigurationFile(path, buildCfgPath))
                 _buildConfiguration = new Configuration(bldCfg);
 
-            using (var cdnCfg = FromDisk(path, "config", cdnCfgPath))
+            using (var cdnCfg = OpenConfigurationFile(path, cdnCfgPath))
                 _cdnConfiguration = new Configuration(cdnCfg);
 
             // 2. Load indices
@@ -75,14 +76,14 @@ namespace wowzer.fs.CASC
             }
         }
 
-        private static FileStream FromDisk(string rootDirectory, string subdirectory, string hash)
-            => File.OpenRead($"{rootDirectory}/Data/{subdirectory}/{hash.AsSpan()[0..2]}/{hash.AsSpan()[2..4]}/{hash}");
+        private static FileStream OpenConfigurationFile(string rootDirectory, string hash)
+            => File.OpenRead($"{rootDirectory}/Data/config/{hash.AsSpan()[0..2]}/{hash.AsSpan()[2..4]}/{hash}");
 
         // Yes, this is stupid, but bypasses exceptions from File.OpenRead.
         // Consider switching to native APIs on Windows?
-        private static FileStream TryFromDisk(string rootDirectory, string subdirectory, string hash)
+        private static FileStream? OpenData(string rootDirectory, string fileName)
         {
-            var filePath = $"{rootDirectory}/Data/{subdirectory}/{hash.AsSpan()[0..2]}/{hash.AsSpan()[2..4]}/{hash}";
+            var filePath = $"{rootDirectory}/Data/data/{fileName}";
             if (File.Exists(filePath))
                 return File.OpenRead(filePath);
 
@@ -98,7 +99,7 @@ namespace wowzer.fs.CASC
             var (archiveIndex, archiveOffset) = fileEntry.Offset;
             // var size = fileEntry.Size; // TODO: Validate that we read the correct amount of bytes
 
-            var diskStream = TryFromDisk(_dataPath, "data", $"data.{archiveIndex:03}");
+            var diskStream = OpenData(_dataPath, $"data.{archiveIndex:000}");
             if (diskStream != null)
             {
                 // Skip over the header preceding the BLTE data.
@@ -107,7 +108,7 @@ namespace wowzer.fs.CASC
                 return diskStream.ReadBLTE();
             }
 
-            return null;
+            return new MemoryStream();
         }
 
         /// <summary>
@@ -185,23 +186,20 @@ namespace wowzer.fs.CASC
             var lookup = encodingKey[index.Spec.Key];
 
             var lowerBound = index.BinarySearchBy(static (entry, lookup) => {
-                var comparison = lookup.SequenceCompareTo(entry.Key);
-                if (comparison == 0)
-                    return 1;
-
-                return comparison;
+                var ordering = entry.Key.SequenceCompareTo(lookup).ToOrdering();
+                return ordering switch {
+                    Ordering.Equal => Ordering.Greater,
+                    _ => ordering
+                };
             }, lookup);
 
             var upperBound = index.BinarySearchBy(static (entry, lookup) => {
-                var comparison = lookup.SequenceCompareTo(entry.Key);
-                if (comparison == 0)
-                    return -1;
-
-                return comparison;
+                var ordering = entry.Key.SequenceCompareTo(lookup).ToOrdering();
+                return ordering switch {
+                    Ordering.Equal => Ordering.Less,
+                    _ => ordering
+                };
             }, lookup);
-
-            if (lowerBound < 0 || upperBound < 0)
-                return [];
 
             return index[lowerBound .. upperBound];
         }

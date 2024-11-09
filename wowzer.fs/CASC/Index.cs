@@ -6,11 +6,13 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 
 using wowzer.fs.Extensions;
+using wowzer.fs.Utils;
 
 namespace wowzer.fs.CASC
 {
@@ -38,7 +40,7 @@ namespace wowzer.fs.CASC
             dataStream.Seek(padding - position, SeekOrigin.Current);
 
             var entriesSize = dataStream.ReadInt32LE();
-            dataStream.Skip(8); // entriesHash (LE)
+            dataStream.Skip(4); // entriesHash (LE)
 
             _rawData = new byte[entriesSize];
             dataStream.ReadExactly(_rawData);
@@ -46,7 +48,7 @@ namespace wowzer.fs.CASC
             Length = entriesSize / Spec.Length;
         }
 
-        public delegate int BinarySearchPredicate<T>(Entry entry, T arg) where T : allows ref struct;
+        public delegate Ordering BinarySearchPredicate<T>(Entry entry, T arg) where T : allows ref struct;
 
         /// <summary>
         /// Performs a binary search with the given predicate.
@@ -54,7 +56,7 @@ namespace wowzer.fs.CASC
         /// <typeparam name="T">An argument to carry around to the predicate.</typeparam>
         /// <param name="cmp">A predicate to use to determine ordering.</param>
         /// <param name="arg">An extra argument to pass to the predicate.</param>
-        /// <returns>The index of a corresponding entry or -1 if none was found.</returns>
+        /// <returns>The index of a corresponding entry or the index at which insertion can happen while maintaining order.</returns>
         public int BinarySearchBy<T>(BinarySearchPredicate<T> cmp, T arg) where T : allows ref struct {
             var size = Length;
             var left = 0;
@@ -63,19 +65,23 @@ namespace wowzer.fs.CASC
             while (left < right)
             {
                 var mid = left + size / 2;
-                var ordering = cmp(this[mid], arg);
+
+                // Note: don't use the indexer; do the math ourselves because we are guaranteed
+                // to be in bounds.
+                var range = new Range(mid * Spec.Length, (mid + 1) * Spec.Length);
+                var ordering = cmp(new Entry(_rawData[range], Spec), arg);
 
                 left = ordering switch {
-                    -1 => mid + 1,
+                    Ordering.Less => mid + 1,
                     _ => left
                 };
 
                 right = ordering switch {
-                    1 => mid,
+                    Ordering.Greater => mid,
                     _ => right
                 };
 
-                if (ordering == 0)
+                if (ordering == Ordering.Equal)
                 {
                     Debug.Assert(mid < Length);
                     return mid;
@@ -85,7 +91,7 @@ namespace wowzer.fs.CASC
             }
 
             Debug.Assert(left < Length);
-            return -1;
+            return left;
         }
 
         public Entry this[int index]
@@ -137,7 +143,7 @@ namespace wowzer.fs.CASC
             private readonly Index _index = index;
             private readonly int _lowerBound = lowerBound;
             private readonly int _upperBound = upperBound;
-            private int _current = lowerBound;
+            private int _current = lowerBound < 0 || upperBound < 0 ? int.MinValue : lowerBound;
 
             public Entry Current {
                 get {
@@ -154,8 +160,7 @@ namespace wowzer.fs.CASC
 
             public bool MoveNext()
             {
-                ++_current;
-                return _current < _upperBound;
+                return _current < _upperBound && _current >= _lowerBound;
             }
 
             public void Reset() => _current = _lowerBound;

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Buffers;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -18,7 +19,9 @@ namespace wowzer.fs.CASC
         public static Header Read(Stream dataStream)
         {
             var signature = dataStream.ReadUInt16BE();
+            Debug.Assert(signature == 0x454E);
             var version = dataStream.ReadUInt8();
+            Debug.Assert(version == 1);
 
             var ckeySize = dataStream.ReadUInt8();
             var ekeySize = dataStream.ReadUInt8();
@@ -46,7 +49,7 @@ namespace wowzer.fs.CASC
             EncodingSpec // NYI
         }
 
-        private readonly Dictionary<ContentKey, Entry> _contentMap = []; // TODO: Calculate expected capacity.
+        private readonly Dictionary<ContentKey, Entry> _contentMap; // TODO: Calculate expected capacity.
         private readonly Dictionary<EncodingKey, (uint, ulong)> _encodingMap = []; // ^
 
         public Encoding(Stream dataStream, LoadFlags loadFlags)
@@ -56,6 +59,13 @@ namespace wowzer.fs.CASC
 
             if (loadFlags.HasFlag(LoadFlags.Content))
             {
+                // Guess the capacity of the dictionary
+                var entrySize = 1 + 5 + header.Content.KeySize;
+                var headerSize = Unsafe.SizeOf<UInt128>() + header.Content.KeySize;
+
+                var projectedCapacity = ((header.Content.PageSize - headerSize) * header.Content.PageCount) / entrySize;
+                _contentMap = new(projectedCapacity);
+
                 ReadSection(dataStream, header.Content, 1 + 5 + header.Content.KeySize, (ref SpanCursor cursor, Spec spec) =>
                 {
                     var firstContentKey = ContentKey.From(cursor.ReadSlice(spec.KeySize));
@@ -90,6 +100,7 @@ namespace wowzer.fs.CASC
             }
             else
             {
+                _contentMap = new(0);
                 dataStream.Skip(header.Content.PageCount * (header.Content.KeySize + 0x10 + header.Content.PageSize));
             }
 

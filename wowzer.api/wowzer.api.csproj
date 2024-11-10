@@ -11,6 +11,7 @@
 	<!-- But disable the warning because it's obnoxious -->
 	<NoWarn>$(NoWarn);1591</NoWarn> <!-- Missing XML comment for publicly visible type or member '$n' -->
 	<LangVersion>preview</LangVersion>
+	<Platforms>AnyCPU</Platforms>
   </PropertyGroup>
 
   <ItemGroup>

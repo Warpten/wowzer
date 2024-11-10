@@ -8,11 +8,6 @@ namespace wowzer.fs.benchmarks
     {
         static void Main(string[] args)
         {
-            var cb = new EndiannessConversionBenchmarks();
-            cb.Setup();
-            cb.BenchmarkEndianness();
-            cb.BenchmarkEndiannessBuiltin();
-
             var summary = BenchmarkRunner.Run(typeof(Program).Assembly, null, args);
         }
     }

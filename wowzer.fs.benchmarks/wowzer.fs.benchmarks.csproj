@@ -9,6 +9,7 @@
 	<DebugType>pdbonly</DebugType>
 	<DebugSymbols>true</DebugSymbols>
 	<LangVersion>preview</LangVersion>
+	<Platforms>AnyCPU</Platforms>
   </PropertyGroup>
 
   <ItemGroup>

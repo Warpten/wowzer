@@ -26,8 +26,8 @@ namespace wowzer.fs.Extensions
         /// <param name="index">The index of the element to return.</param>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static T UnsafeIndex<T>(this T[] arr, int index)
-            => Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(arr), index);
+        public static ref T UnsafeIndex<T>(this T[] arr, int index)
+            => ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(arr), index);
 
         public delegate Ordering BinarySearchPredicate<T>(T entry);
         public delegate Ordering BinarySearchPredicate<T, U>(T entry, U arg) where U : allows ref struct;

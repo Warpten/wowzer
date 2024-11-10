@@ -86,6 +86,7 @@ namespace wowzer.fs.Utils
         {
             var adjustedSize = (int) Math.Min(count, _end - _cursor);
             buffer.AsSpan().Slice(offset, adjustedSize).CopyTo(new Span<byte>(_cursor, adjustedSize));
+            _cursor += adjustedSize;
         }
     }
 }

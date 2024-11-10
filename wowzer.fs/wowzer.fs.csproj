@@ -5,6 +5,7 @@
 	<Nullable>enable</Nullable>
 	<OutputType>Library</OutputType>
 	<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+	<Platforms>AnyCPU</Platforms>
   </PropertyGroup>
 
   <ItemGroup>

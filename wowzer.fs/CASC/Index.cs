@@ -42,7 +42,7 @@ namespace wowzer.fs.CASC
             var entriesSize = dataStream.ReadInt32LE();
             dataStream.Skip(4); // entriesHash (LE)
 
-            _rawData = new byte[entriesSize];
+            _rawData = GC.AllocateUninitializedArray<byte>(entriesSize);
             dataStream.ReadExactly(_rawData);
 
             Length = entriesSize / Spec.Length;
@@ -143,7 +143,7 @@ namespace wowzer.fs.CASC
             private readonly Index _index = index;
             private readonly int _lowerBound = lowerBound;
             private readonly int _upperBound = upperBound;
-            private int _current = lowerBound < 0 || upperBound < 0 ? int.MinValue : lowerBound;
+            private int _current = lowerBound < 0 || upperBound < 0 ? int.MinValue : (lowerBound - 1);
 
             public Entry Current {
                 get {
@@ -160,6 +160,7 @@ namespace wowzer.fs.CASC
 
             public bool MoveNext()
             {
+                ++_current;
                 return _current < _upperBound && _current >= _lowerBound;
             }
 

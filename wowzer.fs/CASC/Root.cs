@@ -27,10 +27,11 @@ namespace wowzer.fs.CASC
         public Root(Stream dataStream)
         {
             var magic = dataStream.ReadUInt32LE();
-            dataStream.Seek(-4, SeekOrigin.Current);
+            if (magic != 0x4D465354)
+                dataStream.Seek(-4, SeekOrigin.Current);
 
             var (format, version, totalFileCount, namedFileCount) = magic switch {
-                0x5453464D => ParseMFST(dataStream), // MFST
+                0x4D465354 => ParseMFST(dataStream), // MFST
                 _ => (Format.Legacy, 0, 0, 0)
             };
 
@@ -49,15 +50,13 @@ namespace wowzer.fs.CASC
                 if (recordCount == 0)
                     continue;
 
-                var fdids = new int[recordCount];
+                // At this point this is a fdid delta
+                var fdids = dataStream.ReadInt32LE(recordCount);
                 {
-                    var fdid = -1;
-                    for (var i = 0; i < recordCount; ++i) {
-                        var increment = dataStream.ReadInt32LE();
-                        Debug.Assert(increment >= 0);
+                    for (var i = 1; i < recordCount; ++i) {
+                        Debug.Assert(fdids[i] >= 0);
 
-                        fdid += increment + 1;
-                        fdids[i] = fdid;
+                        fdids[i] += fdids[i - 1] + 1;
                     }
                 }
 
@@ -70,15 +69,17 @@ namespace wowzer.fs.CASC
                 var page = new Page(records, contentFlags, localeFlags);
                 pages.Add(page);
             }
+            pages.SortBy(page => page.Records[0].FileDataID);
             _pages = [.. pages];
 
             Debug.Assert(format == Format.Legacy || totalFileCount == pages.Sum(p => p.Records.Length));
 
-            for (var i = 0; i < pages.Count; ++i) {
+            for (var i = 0; i < _pages.Length; ++i) {
                 var page = pages[i];
                 if (allowUnnamedFiles && (page.ContentFlags & 0x10000000) != 0) {
                     for (var j = 0; j < page.Records.Length; ++j)
-                        _hashes.Add(page.Records[j].NameHash, (i, j));
+                        if (page.Records[j].NameHash != 0)
+                            _hashes.Add(page.Records[j].NameHash, (i, j));
                 }
             }
 
@@ -140,13 +141,13 @@ namespace wowzer.fs.CASC
             var sectionContents = GC.AllocateUninitializedArray<byte>(nhr.End.Value);
             dataStream.ReadExactly(sectionContents);
 
-            var contentKeys = sectionContents[ckr];
-            var nameHashes = new SpanCursor(sectionContents[nhr]);
+            var contentKeys = sectionContents.AsSpan()[ckr];
+            var nameHashes = new SpanCursor(sectionContents.AsSpan()[nhr]);
 
             var records = GC.AllocateUninitializedArray<Record>(recordCount);
             for (var i = 0; i < recordCount; ++i)
             {
-                var contentKey = ContentKey.From(contentKeys.AsSpan().Slice(i * 16, (i + 1) * 16));
+                var contentKey = ContentKey.From(contentKeys.Slice(i * 16, 16));
                 var nameHash = nameHashes.Remaining switch {
                     >= 8 => nameHashes.ReadBE<ulong>(),
                     _ => 0uL

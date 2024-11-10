@@ -69,6 +69,6 @@ namespace wowzer.fs.CASC
         /// <param name="fileSystem">The filesystem to read from.</param>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public MemoryStream Read(FileSystem fileSystem) => fileSystem.Open(this);
+        public Stream Read(FileSystem fileSystem) => fileSystem.Open(this);
     }
 }

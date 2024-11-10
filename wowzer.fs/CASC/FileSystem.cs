@@ -51,12 +51,12 @@ namespace wowzer.fs.CASC
             );
 
             foreach (var encodingIndex in FindEncodingKey(encodingKey)) {
-                var encodingStream = Open(encodingIndex);
+                using var encodingStream = Open(encodingIndex);
                 try {
                     _encoding = new Encoding(encodingStream, Encoding.LoadFlags.Content);
                     break;
-                } catch (EndOfStreamException) {
-                    // Possibly log this.
+                } catch (EndOfStreamException ex) {
+                    Console.WriteLine(ex);
                 }
             }
 
@@ -64,9 +64,9 @@ namespace wowzer.fs.CASC
                 throw new InvalidOperationException("Could not load encoding");
 
             // 4. Load root
-            var rootKey = _buildConfiguration["root"].As(ContentKey.From);
+            var rootKey = _buildConfiguration["root"].As(data => data.AsKeyString<ContentKey>());
             foreach (var rootIndex in FindContentKey(rootKey)) {
-                var rootStream = Open(rootIndex);
+                using var rootStream = Open(rootIndex);
                 try {
                     _root = new Root(rootStream);
                     break;
@@ -95,9 +95,9 @@ namespace wowzer.fs.CASC
         /// </summary>
         /// <param name="fileEntry"> And entry identifying the file in this filesystem.</param>
         /// <returns></returns>
-        public MemoryStream Open(Entry fileEntry) {
+        public Stream Open(Entry fileEntry) {
             var (archiveIndex, archiveOffset) = fileEntry.Offset;
-            // var size = fileEntry.Size; // TODO: Validate that we read the correct amount of bytes
+            var size = fileEntry.Size; // TODO: Validate that we read the correct amount of bytes
 
             var diskStream = OpenData(_dataPath, $"data.{archiveIndex:000}");
             if (diskStream != null)
@@ -105,7 +105,7 @@ namespace wowzer.fs.CASC
                 // Skip over the header preceding the BLTE data.
                 // TODO: Probably fix this to validate said header instead?
                 diskStream.Seek(archiveOffset + 0x10 + 4 + 2 + 4 + 4, SeekOrigin.Current);
-                return diskStream.ReadBLTE();
+                return diskStream.ReadBLTE(size);
             }
 
             return new MemoryStream();

@@ -186,7 +186,7 @@ namespace wowzer.fs.CASC
     public interface IContentKey { }
 
     // All this code looks stupid but I'm trying to teach the JIT that 16-bytes keys is a hot path that should be preferred and optimized.
-    public class ContentKey : IKey<ContentKey>, IContentKey
+    public readonly struct ContentKey : IKey<ContentKey>, IContentKey
     {
         private readonly IKeyStorage _storage;
 
@@ -202,6 +202,15 @@ namespace wowzer.fs.CASC
         public static ContentKey From(ReadOnlySpan<byte> data) => new(data);
 
         public int Length => _storage.GetLength();
+
+        public override int GetHashCode()
+        {
+            var hashCode = new HashCode();
+            hashCode.AddBytes(AsSpan());
+            return hashCode.ToHashCode();
+        }
+
+        public override bool Equals(object obj) => obj is ContentKey other && AsSpan().SequenceEqual(other.AsSpan());
     }
 
     public interface IEncodingKey { }
@@ -209,7 +218,7 @@ namespace wowzer.fs.CASC
     /// <summary>
     /// A so-called encoding key used to identify resources in a CASC file system.
     /// </summary>
-    public class EncodingKey : IKey<EncodingKey>, IEncodingKey
+    public readonly struct EncodingKey : IKey<EncodingKey>, IEncodingKey
     {
         private readonly IKeyStorage _storage;
 
@@ -225,6 +234,15 @@ namespace wowzer.fs.CASC
         public static EncodingKey From(ReadOnlySpan<byte> data) => new(data);
 
         public int Length => _storage.GetLength();
+
+        public override int GetHashCode()
+        {
+            var hashCode = new HashCode();
+            hashCode.AddBytes(AsSpan());
+            return hashCode.ToHashCode();
+        }
+
+        public override bool Equals(object obj) => obj is ContentKey other && AsSpan().SequenceEqual(other.AsSpan());
     }
 
     interface IKeyStorage {

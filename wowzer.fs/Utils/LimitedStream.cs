@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.Metrics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -16,12 +17,12 @@ namespace wowzer.fs.Utils
     /// </remarks>
     /// <param name="underlyingStream">The stream to read from.</param>
     /// <param name="length">The number of bytes to read from the parent stream.</param>
-    public class LimitedStream(Stream underlyingStream, long length) : Stream
+    public class LimitedStream<T>(T underlyingStream, long length) : Stream where T : Stream
     {
         /// <summary>
         /// The stream to read from.
         /// </summary>
-        private readonly Stream _underlyingStream = underlyingStream;
+        private readonly T _underlyingStream = underlyingStream;
 
         /// <summary>
         /// The total length of the stream.
@@ -33,7 +34,6 @@ namespace wowzer.fs.Utils
         /// </summary>
         private long _remainingBytes = length;
 
-        /// <inheritdoc />
         public bool IsDisposed { get; private set; }
 
         /// <inheritdoc />
@@ -63,10 +63,10 @@ namespace wowzer.fs.Utils
         }
 
         /// <inheritdoc />
-        public override void Flush() => ThrowDisposedOr(new NotSupportedException());
+        public override void Flush() => throw new NotSupportedException();
 
         /// <inheritdoc />
-        public override Task FlushAsync(CancellationToken cancellationToken) => throw ThrowDisposedOr(new NotSupportedException());
+        public override Task FlushAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
 
         /// <inheritdoc />
         public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
@@ -80,35 +80,28 @@ namespace wowzer.fs.Utils
             if (offset + count > buffer.Length)
                 throw new ArgumentException();
 
-            count = (int)Math.Min(count, this._remainingBytes);
+            count = (int)Math.Min(count, _remainingBytes);
             if (count <= 0)
                 return 0;
 
-            int bytesRead = await _underlyingStream.ReadAsync(buffer, offset, count, cancellationToken);
+            int bytesRead = await _underlyingStream.ReadAsync(buffer, offset, count, cancellationToken).ConfigureAwait(false);
+            _remainingBytes -= bytesRead;
+            return bytesRead;
+        }
+
+        public override int Read(Span<byte> buffer)
+        {
+            if (buffer.Length > _remainingBytes)
+                buffer = buffer[..(int) _remainingBytes];
+
+            int bytesRead = _underlyingStream.Read(buffer);
             _remainingBytes -= bytesRead;
             return bytesRead;
         }
 
         /// <inheritdoc />
         public override int Read(byte[] buffer, int offset, int count)
-        {
-            if (buffer == null)
-                throw new ArgumentNullException(nameof(buffer));
-
-            if (offset < 0 || count < 0)
-                throw new ArgumentOutOfRangeException();
-
-            if (offset + count > buffer.Length)
-                throw new ArgumentException();
-
-            count = (int)Math.Min(count, _remainingBytes);
-            if (count <= 0)
-                return 0;
-
-            int bytesRead = _underlyingStream.Read(buffer, offset, count);
-            _remainingBytes -= bytesRead;
-            return bytesRead;
-        }
+            => Read(buffer.AsSpan().Slice(offset, count));
 
         /// <inheritdoc />
         public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
@@ -154,30 +147,17 @@ namespace wowzer.fs.Utils
         }
 
         /// <inheritdoc />
-        public override void SetLength(long value) => throw ThrowDisposedOr(new NotSupportedException());
+        public override void SetLength(long value) => throw new NotSupportedException();
 
         /// <inheritdoc />
         public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
-        {
-            throw new NotSupportedException();
-        }
+            => throw new NotSupportedException();
 
         /// <inheritdoc />
         public override void Write(byte[] buffer, int offset, int count)
-        {
-            throw new NotSupportedException();
-        }
+            => throw new NotSupportedException();
 
         /// <inheritdoc />
-        protected override void Dispose(bool disposing)
-        {
-            this.IsDisposed = true;
-            base.Dispose(disposing);
-        }
-
-        private Exception ThrowDisposedOr(Exception ex)
-        {
-            throw ex;
-        }
+        protected override void Dispose(bool disposing) { }
     }
 }

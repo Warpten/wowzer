@@ -10,6 +10,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
+using wowzer.fs.IO;
 using wowzer.fs.Utils;
 
 namespace wowzer.fs.Extensions
@@ -66,8 +67,11 @@ namespace wowzer.fs.Extensions
             return buffer;
         }
 
+        public static BLTE<T> ReadBLTE<T>(this T dataStream) where T : Stream => new BLTE<T>(dataStream, dataStream.Length);
+        public static BLTE<T> ReadBLTE<T>(this T dataStream, long length) where T : Stream => new BLTE<T>(dataStream, length);
+
         [SkipLocalsInit]
-        public static MemoryStream ReadBLTE(this Stream dataStream)
+        public static MemoryStream ReadMemoryBLTE(this Stream dataStream)
         {
             var magic = dataStream.ReadUInt32LE();
             Debug.Assert(magic == 0x45544C42);
@@ -101,10 +105,10 @@ namespace wowzer.fs.Extensions
                         writePos += chunk.CompressedSize;
                         break;
                     case (byte) 'Z':
-                        using (var compressedSource = dataStream.ReadSlice(chunk.CompressedSize))
-                        using (var writeTarget = new UnsafeSpanStream(dst.AsSpan().Slice(writePos)))
-                        using (var dataSource = new ZLibStream(compressedSource, CompressionMode.Decompress, true))
-                            dataSource.CopyTo(writeTarget);
+                        using (var compression = new ZLibStream(dataStream.ReadSlice(chunk.CompressedSize), CompressionMode.Decompress, true))
+                        using (var target = new UnsafeSpanStream(dst.AsSpan().Slice(writePos, chunk.DecompressedSize)))
+                            compression.CopyTo(target);
+
                         writePos += chunk.DecompressedSize;
                         break;
                     default:
@@ -119,6 +123,7 @@ namespace wowzer.fs.Extensions
 
         private record struct ChunkInfo(int CompressedSize, int DecompressedSize, UInt128 Checksum);
 
-        public static Stream ReadSlice(this Stream stream, long length) => new LimitedStream(stream, length);
+        public static LimitedStream<T> ReadSlice<T>(this T stream, long length) where T : Stream
+            => new LimitedStream<T>(stream, length);
     }
 }

@@ -41,9 +41,10 @@ namespace wowzer.fs.Extensions
                         return false;
 
                     _current = _source.Current.GetEnumerator();
+                    moved = _current.MoveNext();
                 }
 
-                return _current.MoveNext();
+                return moved;
             }
 
             public void Reset() => throw new InvalidOperationException();

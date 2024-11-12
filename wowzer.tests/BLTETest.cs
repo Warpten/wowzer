@@ -39,7 +39,7 @@ namespace wowzer.tests
             using var writer = new BinaryWriter(ms, Encoding.ASCII, true);
             writer.Write(0x45544C42);
 
-            writer.Write(0); // Header Size - BE4
+            writer.Write(BinaryPrimitives.ReverseEndianness(3 * 4 + 3 * (4 + 4 + 16))); // Header Size - BE4
             writer.Write(0x020000ff); // Chunk Count - BE3 & Flags
 
             { // First chunk
@@ -62,6 +62,16 @@ namespace wowzer.tests
                 writer.Write(0x00000000);
             }
 
+            { // Third chunk
+                writer.Write(0x05000000);
+                writer.Write(0x04000000);
+                // Checksum
+                writer.Write(0x00000000);
+                writer.Write(0x00000000);
+                writer.Write(0x00000000);
+                writer.Write(0x00000000);
+            }
+
             { // First chunk
                 writer.Write((byte) 'N');
                 writer.Write((byte) 0xCC);
@@ -70,6 +80,11 @@ namespace wowzer.tests
             { // Second chunk
                 writer.Write((byte) 'Z');
                 writer.Write(COMPRESSED_DATA);
+            }
+
+            { // Third chunk
+                writer.Write((byte) 'N');
+                writer.Write(0xDEADBEEF);
             }
 
             writer.Flush();
@@ -83,19 +98,24 @@ namespace wowzer.tests
         {
             using var source = GenerateBLTE();
 
-            using var decompressed = new MemoryStream();
-            using (var blte = source.ReadBLTE())
-                blte.CopyTo(decompressed);
+            using var decompressed = source.ReadBLTE();
 
             decompressed.Position = 0;
 
+            // Read 0xCC from the single byte stream
             Assert.AreEqual(0xCC, decompressed.ReadUInt8());
 
+            // And now the string.
             var str = decompressed.ReadUInt8(DECOMPRESSED_DATA.Length);
             Assert.That.AreEqual(DECOMPRESSED_DATA, str, (left, right) => left.SequenceEqual(right));
 
             decompressed.Position = 0;
-            Console.WriteLine(string.Join(", ", decompressed.GetBuffer()));
+
+            // Skip 8 bytes, 1 + 7 across a chunk boundary.
+            decompressed.Skip(8);
+            var partialString = decompressed.ReadUInt8(DECOMPRESSED_DATA.Length - 7 + 3);
+            Assert.That.AreEqual(DECOMPRESSED_DATA.Skip(7), partialString, (left, right) => left.SequenceEqual(right));
+
         }
 
         [TestMethod]
@@ -111,11 +131,10 @@ namespace wowzer.tests
 
             Assert.AreEqual(0xCC, decompressed.ReadUInt8());
 
-            var str = decompressed.ReadUInt8(DECOMPRESSED_DATA.Length);
-            Assert.That.AreEqual(DECOMPRESSED_DATA, str, (left, right) => left.SequenceEqual(right));
+            var str = decompressed.ReadUInt8(DECOMPRESSED_DATA.Length + 3);
 
-            decompressed.Position = 0;
-            Console.WriteLine(string.Join(", ", decompressed.GetBuffer()));
+            var reference = Enumerable.Concat<byte>(DECOMPRESSED_DATA, [0xDE, 0xAD, 0xBE]);
+            Assert.That.AreEqual(reference, str, (left, right) => left.SequenceEqual(right));
         }
     }
 }

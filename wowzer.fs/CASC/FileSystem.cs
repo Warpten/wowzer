@@ -38,7 +38,7 @@ namespace wowzer.fs.CASC
                 if (!dataFile.EndsWith(".idx"))
                     continue;
 
-                using var fileStream = File.OpenRead(dataFile);
+                using var fileStream = new FileStream(dataFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
                 indices.Add(new Index(fileStream));
             }
             indices.Sort((left, right) => left.Bucket.CompareTo(right.Bucket));

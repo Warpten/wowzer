@@ -44,7 +44,7 @@ namespace wowzer.fs.IO
                 var decompressedSize = _underlyingStream.ReadInt32BE();
 
                 var checksum = _underlyingStream.ReadUInt128BE();
-                _chunks[i] = new(compressedSize - 1, decompressedSize, checksum, chunkOffset, 0, decompressedSize);
+                _chunks[i] = new(compressedSize, decompressedSize, checksum, chunkOffset, 0, decompressedSize);
 
                 chunkOffset += compressedSize;
             }
@@ -65,12 +65,18 @@ namespace wowzer.fs.IO
 
         public override int Read(byte[] buffer, int offset, int count)
         {
+#if _DEBUG
+            Debug.Assert(_chunkIndex < _chunks.Length);
+#else
+            if (_chunkIndex >= _chunks.Length)
+                return 0;
+#endif
+
             var totalReadCount = 0;
             while (count > 0) {
                 ref var currentChunk = ref _chunks.UnsafeIndex(_chunkIndex);
 
-                if (currentChunk.CompressionMode == 0)
-                    Initialize(ref currentChunk);
+                TryInitialize(ref currentChunk, true);
 
                 switch (currentChunk.CompressionMode) {
                     case (byte) 'N':
@@ -95,13 +101,15 @@ namespace wowzer.fs.IO
                         throw new NotImplementedException();
                 }
 
+                // Chunk is done, seek to the next chunk.
                 if (currentChunk.Remainder == 0)
                 {
                     if (_chunkIndex + 1 >= _chunks.Length)
                         return totalReadCount;
 
-                    _currentChunk!.Dispose();
+                    _currentChunk?.Dispose();
                     _currentChunk = null;
+
                     ++_chunkIndex;
                 }
             }
@@ -115,9 +123,13 @@ namespace wowzer.fs.IO
                 throw new NotSupportedException();
 
             _position = 0;
+
+            var seekOffset = 0L;
+
             for (var i = 0; i < _chunks.Length && decompressedOffset > 0; ++i)
             {
                 ref var currentChunk = ref _chunks.UnsafeIndex(i);
+                TryInitialize(ref currentChunk, false);
 
                 if (decompressedOffset >= currentChunk.DecompressedSize)
                 {
@@ -128,10 +140,12 @@ namespace wowzer.fs.IO
                     _position += currentChunk.DecompressedSize;
 
                     _currentChunk?.Dispose();
+                    _currentChunk = null;
 
                     // Prepare for next chunk.
                     _chunkIndex = i + 1;
-                    _underlyingStream.Seek(currentChunk.Offset + currentChunk.CompressedSize + 1, SeekOrigin.Begin);
+
+                    seekOffset = currentChunk.Offset + currentChunk.CompressedSize;
                 }
                 else
                 {
@@ -140,8 +154,14 @@ namespace wowzer.fs.IO
                     if (currentChunk.CompressionMode == 0)
                     {
                         _underlyingStream.Seek(currentChunk.Offset, SeekOrigin.Begin);
-                        Initialize(ref currentChunk, true);
+
+                        TryInitialize(ref currentChunk, true);
                     }
+
+                    currentChunk.Remainder = (int) (currentChunk.DecompressedSize - decompressedOffset);
+                    _position += (int) decompressedOffset;
+
+                    _chunkIndex = i;
 
                     if (currentChunk.CompressionMode == (byte)'Z')
                     {
@@ -151,44 +171,51 @@ namespace wowzer.fs.IO
 
                         // Seek to the start of the chunk's compressed data.
                         _underlyingStream.Seek(currentChunk.Offset + 1, SeekOrigin.Begin);
+                        TryInitialize(ref currentChunk, true);
 
-                        _currentChunk?.Dispose();
-                        _currentChunk = new ZLibStream(_underlyingStream.ReadSlice(currentChunk.CompressedSize), CompressionMode.Decompress);
-                        _currentChunk.Skip((int)decompressedOffset);
+                        // Skip the amount of consumable bytes
+                        _currentChunk!.Skip((int) decompressedOffset);
+
+                        return _position;
                     }
                     else if (currentChunk.CompressionMode == (byte)'N')
                     {
                         // Skip to the actual offset within the chunk.
-                        _underlyingStream.Seek(currentChunk.Offset + 1 + decompressedOffset, SeekOrigin.Begin);
+                        seekOffset = currentChunk.Offset + 1 + decompressedOffset;
                         currentChunk.Remainder = (int)(currentChunk.DecompressedSize - decompressedOffset);
+                        decompressedOffset = 0;
                     }
-
-                    currentChunk.Remainder = (int)(currentChunk.DecompressedSize - decompressedOffset);
-                    _position += (int)decompressedOffset;
-                    decompressedOffset = 0;
-
-                    _chunkIndex = i;
+                    else 
+                        throw new UnreachableException();
                 }
             }
+
+            _underlyingStream.Seek(seekOffset, SeekOrigin.Begin);
+            TryInitialize(ref _chunks.UnsafeIndex(_chunkIndex), true);
             return _position;
         }
 
-        private void Initialize(ref ChunkInfo chunkInfo, bool lazy = false)
+        private void TryInitialize(ref ChunkInfo chunkInfo, bool initializeChunkStream)
         {
-            var compressionMode = _underlyingStream.ReadUInt8();
-            Debug.Assert(compressionMode != 0);
+            // If compression is unknown, read it.
+            if (chunkInfo.CompressionMode == 0) {
+                Debug.Assert(_underlyingStream.Position == chunkInfo.Offset);
 
-            chunkInfo.CompressionMode = compressionMode;
-            chunkInfo.Remainder = chunkInfo.DecompressedSize;
+                var compressionMode = _underlyingStream.ReadUInt8();
+                Debug.Assert(compressionMode != 0);
 
-            if (lazy)
-                return;
+                chunkInfo.Remainder = chunkInfo.DecompressedSize;
+                chunkInfo.CompressionMode = compressionMode;
+            }
 
-            _currentChunk = compressionMode switch
-            {
-                (byte)'Z' => new ZLibStream(_underlyingStream.ReadSlice(chunkInfo.CompressedSize), CompressionMode.Decompress),
-                _ => _underlyingStream.ReadSlice(chunkInfo.CompressedSize)
-            };
+            if (initializeChunkStream && chunkInfo.Remainder == chunkInfo.DecompressedSize) {
+                Debug.Assert(_underlyingStream.Position == chunkInfo.Offset + 1);
+
+                _currentChunk = chunkInfo.CompressionMode switch {
+                    (byte)'Z' => new ZLibStream(_underlyingStream.ReadSlice(chunkInfo.CompressedSize - 1), CompressionMode.Decompress),
+                    _ => _underlyingStream.ReadSlice(chunkInfo.Remainder)
+                };
+            }
         }
 
         public override long Seek(long offset, SeekOrigin origin)

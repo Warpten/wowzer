@@ -52,7 +52,7 @@ namespace wowzer.fs.CASC
         [SkipLocalsInit]
         public readonly ref struct OpaqueProperty(ReadOnlySpan<byte> rawData)
         {
-            public static OpaqueProperty Empty => new(ReadOnlySpan<byte>.Emùpty);
+            public static OpaqueProperty Empty => new(ReadOnlySpan<byte>.Empty);
 
             private readonly ReadOnlySpan<byte> _rawData = rawData;
 

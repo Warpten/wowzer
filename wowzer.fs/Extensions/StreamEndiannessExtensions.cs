@@ -63,7 +63,19 @@ namespace wowzer.fs.Extensions
             return value;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining), SkipLocalsInit]
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining), SkipLocalsInit]
+		public static unsafe T ReadNative<T>(this Stream stream) where T : unmanaged, IBinaryInteger<T>
+		{
+			var value = default(T);
+			var valueSpan = MemoryMarshal.CreateSpan(ref value, 1);
+			var valueBytes = MemoryMarshal.AsBytes(valueSpan);
+
+			stream.ReadExactly(valueBytes);
+			return value;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining), SkipLocalsInit]
         public static unsafe T[] ReadEndianAware<T>(this Stream stream, int count, bool reverse) where T : unmanaged, IBinaryInteger<T>
         {
             var value = GC.AllocateUninitializedArray<T>(count);

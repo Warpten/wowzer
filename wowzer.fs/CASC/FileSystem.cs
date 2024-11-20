@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Reflection.Metadata;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -12,10 +13,12 @@ using wowzer.fs.Utils;
 
 namespace wowzer.fs.CASC
 {
+    /// <summary>
+    /// A filesystem provides access to multiple installations of a game product.
+    /// </summary>
     public class FileSystem
     {
         private readonly string _dataPath;
-        private readonly Configuration _cdnConfiguration;
         private readonly Configuration _buildConfiguration;
         private readonly Index[] _indices = [];
         private readonly Encoding _encoding;
@@ -26,11 +29,8 @@ namespace wowzer.fs.CASC
             _dataPath = path;
 
             // 1. Load configuration files
-            using (var bldCfg = OpenConfigurationFile(path, buildCfgPath))
+            using (var bldCfg = OpenConfigurationFile(buildCfgPath))
                 _buildConfiguration = new Configuration(bldCfg);
-
-            using (var cdnCfg = OpenConfigurationFile(path, cdnCfgPath))
-                _cdnConfiguration = new Configuration(cdnCfg);
 
             // 2. Load indices
             var indices = new List<Index>();
@@ -43,6 +43,8 @@ namespace wowzer.fs.CASC
             }
             indices.Sort((left, right) => left.Bucket.CompareTo(right.Bucket));
             _indices = [.. indices];
+            if (_indices.Length == 0)
+                throw new InvalidOperationException("No indices");
 
             // 3. Load encoding
             var (_, encodingKey) = _buildConfiguration["encoding"].As(
@@ -52,12 +54,11 @@ namespace wowzer.fs.CASC
 
             foreach (var encodingIndex in FindEncodingKey(encodingKey)) {
                 using var encodingStream = Open(encodingIndex);
-                try {
-                    _encoding = new Encoding(encodingStream, Encoding.LoadFlags.Content);
+                if (encodingStream.IsValid)
+                    _encoding = new Encoding(encodingStream.Open(), Encoding.LoadFlags.Content);
+
+                if (_encoding != null)
                     break;
-                } catch (EndOfStreamException ex) {
-                    Console.WriteLine(ex);
-                }
             }
 
             if (_encoding == null)
@@ -67,48 +68,47 @@ namespace wowzer.fs.CASC
             var rootKey = _buildConfiguration["root"].As(data => data.AsKeyString<ContentKey>());
             foreach (var rootIndex in FindContentKey(rootKey)) {
                 using var rootStream = Open(rootIndex);
-                try {
-                    _root = new Root(rootStream);
+                if (rootStream.IsValid)
+                    _root = new Root(rootStream.Open());
+
+                if (_root != null)
                     break;
-                } catch (EndOfStreamException) {
-                    // Possibly log this.
-                }
             }
         }
 
-        private static FileStream OpenConfigurationFile(string rootDirectory, string hash)
-            => File.OpenRead($"{rootDirectory}/Data/config/{hash.AsSpan()[0..2]}/{hash.AsSpan()[2..4]}/{hash}");
+        private FileStream OpenConfigurationFile(string hash)
+            => File.OpenRead($"{_dataPath}/Data/config/{hash.AsSpan()[0..2]}/{hash.AsSpan()[2..4]}/{hash}");
 
         // Yes, this is stupid, but bypasses exceptions from File.OpenRead.
         // Consider switching to native APIs on Windows?
-        private static FileStream? OpenData(string rootDirectory, string fileName)
+        private static Stream OpenData(string rootDirectory, string fileName)
         {
             var filePath = $"{rootDirectory}/Data/data/{fileName}";
             if (File.Exists(filePath))
                 return File.OpenRead(filePath);
 
-            return null;
+            return Stream.Null;
         }
 
         /// <summary>
         /// Opens a stream over a file's content. This operation is greedy and loads the entire file in memory.
         /// </summary>
         /// <param name="fileEntry"> And entry identifying the file in this filesystem.</param>
-        /// <returns></returns>
-        public Stream Open(Entry fileEntry) {
+        /// <returns>A stream over the file's content, or <see cref="Stream.Null"/> if the file could not be found.</returns>
+        public Handle Open(Entry fileEntry) {
             var (archiveIndex, archiveOffset) = fileEntry.Offset;
             var size = fileEntry.Size; // TODO: Validate that we read the correct amount of bytes
 
             var diskStream = OpenData(_dataPath, $"data.{archiveIndex:000}");
-            if (diskStream != null)
+            if (diskStream != Stream.Null)
             {
                 // Skip over the header preceding the BLTE data.
                 // TODO: Probably fix this to validate said header instead?
                 diskStream.Seek(archiveOffset + 0x10 + 4 + 2 + 4 + 4, SeekOrigin.Current);
-                return diskStream.ReadBLTE(size);
+                return new Handle(diskStream.ReadBLTE(size));
             }
 
-            return new MemoryStream();
+            return Handle.Empty;
         }
 
         /// <summary>
@@ -165,7 +165,7 @@ namespace wowzer.fs.CASC
             => FindEncodingKeyImpl(encodingKey);
 
         /// <remarks>
-        ///  <typeparamref name="T"/> is needed to because this function needs access to <see cref="IKey{T}.this[int]"/>.
+        ///  <typeparamref name="T"/> is needed because this function needs access to <see cref="IKey{T}.this[int]"/> and <see cref="IKey{T}.this[Range]"/>.
         ///  This avoids boxing and the language can devirtualize.
         /// </remarks>
         private IEnumerable<Entry> FindEncodingKeyImpl<T>(T encodingKey)

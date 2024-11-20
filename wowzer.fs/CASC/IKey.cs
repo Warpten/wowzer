@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics.Contracts;
 using System.Runtime.CompilerServices;
@@ -21,7 +22,12 @@ namespace wowzer.fs.CASC
         /// <returns></returns>
         [Pure] public ReadOnlySpan<byte> AsSpan();
 
-        [Pure] public ReadOnlySpan<byte> this[Range index] => AsSpan()[index];
+        /// <summary>
+        /// Returns a read-only view over a subset of the bytes stored in this object.
+        /// </summary>
+        /// <param name="range">The range of bytes to select</param>
+        /// <returns></returns>
+        [Pure] public ReadOnlySpan<byte> this[Range range] => AsSpan()[range];
 
         /// <summary>
         /// Accesses the <paramref name="index"/>-th byte of this key.
@@ -29,19 +35,30 @@ namespace wowzer.fs.CASC
         /// <param name="index"></param>
         /// <returns></returns>
         /// <remarks><b>This function is unsafe and avoids bounds checks</b>; see <see cref="Length"/>.</remarks>
-        public byte this[int index] => Unsafe.Add(ref MemoryMarshal.GetReference(AsSpan()), index);
+        [Pure] public byte this[int index] => Unsafe.Add(ref MemoryMarshal.GetReference(AsSpan()), index);
 
         /// <summary>
         /// Returns the actual amount of bytes this object encapsulates.
         /// </summary>
-        public int Length { get; }
+        [Pure] public int Length { get; }
 
         bool IEquatable<T>.Equals(T? other) => other != null && other.AsSpan().SequenceEqual(AsSpan());
         int IComparable<T>.CompareTo(T? other) => other != null ? other.AsSpan().SequenceCompareTo(AsSpan()) : -1;
 
+        /// <summary>
+        /// Creates an instance of this object from a given arbitrary amount of bytes.
+        /// </summary>
+        /// <param name="data">A continuous region of an arbitrary amount of bytes.</param>
+        /// <returns></returns>
         [Pure] internal static abstract T From(ReadOnlySpan<byte> data);
 
-        [Pure, SkipLocalsInit] internal static virtual T[] FromString(ReadOnlySpan<byte> str, byte delimiter)
+        /// <summary>
+        /// Creates a number of instances of this object from a given ASCII string where the delimiter for each object is given.
+        /// </summary>
+        /// <param name="str">The input ASCII string.</param>
+        /// <param name="delimiter">A single-character delimiter.</param>
+        /// <returns></returns>
+        [Pure, SkipLocalsInit] internal static virtual T?[] FromString(ReadOnlySpan<byte> str, byte delimiter)
         {
             var sections = str.Split(delimiter, true);
             if (sections.Length == 0)
@@ -56,7 +73,12 @@ namespace wowzer.fs.CASC
             return dest;
         }
 
-        [Pure, SkipLocalsInit] internal virtual static T FromString(ReadOnlySpan<byte> sourceChars)
+        /// <summary>
+        /// Creates an instance of this object from the given ASCII string.
+        /// </summary>
+        /// <param name="sourceChars">An ASCII string.</param>
+        /// <returns></returns>
+        [Pure, SkipLocalsInit] internal virtual static T? FromString(ReadOnlySpan<byte> sourceChars)
         {
             if (sourceChars.IsEmpty)
                 return default;
@@ -116,9 +138,8 @@ namespace wowzer.fs.CASC
                     }
                     else
                     {
-                        // Consider sse2neon ?
-                        t0 = default;
-                        throw new NotImplementedException();
+                        // Unreachable.
+                        throw new UnreachableException();
                     }
 
                     var output = Vector128.Shuffle(t0, Vector128.Create((byte) 0, 2, 4, 6, 8, 10, 12, 14, 0, 0, 0, 0, 0, 0, 0, 0));

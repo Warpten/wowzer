@@ -25,8 +25,8 @@ namespace wowzer.fs.Extensions
             return value;
         }
 
-        public static byte ReadUInt8(this Stream stream) => (byte) stream.ReadByte();
-        public static sbyte ReadInt8(this Stream stream) => (sbyte) stream.ReadByte();
+        public static byte ReadUInt8(this Stream stream) => (byte)stream.ReadByte();
+        public static sbyte ReadInt8(this Stream stream) => (sbyte)stream.ReadByte();
 
         public static byte[] ReadUInt8(this Stream stream, int length)
         {
@@ -81,7 +81,7 @@ namespace wowzer.fs.Extensions
             var flags = chunkCount >> 24;
             chunkCount &= 0xFFFFFF;
 
-            var chunkInfo = GC.AllocateUninitializedArray<ChunkInfo>((int) chunkCount);
+            var chunkInfo = GC.AllocateUninitializedArray<ChunkInfo>((int)chunkCount);
             for (var i = 0; i < chunkCount; ++i)
             {
                 var compressedSize = dataStream.ReadInt32BE();
@@ -96,15 +96,16 @@ namespace wowzer.fs.Extensions
             var dst = GC.AllocateUninitializedArray<byte>(allocationSize);
             var writePos = 0;
 
-            foreach (var chunk in chunkInfo) {
+            foreach (var chunk in chunkInfo)
+            {
                 var encodingMode = dataStream.ReadUInt8();
                 switch (encodingMode)
                 {
-                    case (byte) 'N':
+                    case (byte)'N':
                         dataStream.ReadExactly(dst.AsSpan().Slice(writePos, chunk.CompressedSize));
                         writePos += chunk.CompressedSize;
                         break;
-                    case (byte) 'Z':
+                    case (byte)'Z':
                         using (var compression = new ZLibStream(dataStream.ReadSlice(chunk.CompressedSize), CompressionMode.Decompress, true))
                         using (var target = new UnsafeSpanStream(dst.AsSpan().Slice(writePos, chunk.DecompressedSize)))
                             compression.CopyTo(target);
